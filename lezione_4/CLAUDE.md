@@ -58,7 +58,7 @@ Un'applicazione da terminale in Python che conversa con un modello locale e:
   regole di lavoro), non per annotare l'avanzamento.
 
 ## Comandi
-Da PowerShell, dalla cartella `lezione_4/` (comandi verificati; dettagli nel `README.md`):
+Da PowerShell, dalla cartella `lezione_4/` (comandi verificati, salvo dove indicato; dettagli nel `README.md`):
 - ambiente: `py -m venv .venv` poi `.\.venv\Scripts\python -m pip install -r requirements-dev.txt`;
 - caricare `.env` nella sessione:
   `Get-Content .env | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Object { $k, $v = $_ -split '=', 2; Set-Item "env:$($k.Trim())" $v.Trim() }`;

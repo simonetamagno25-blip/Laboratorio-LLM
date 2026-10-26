@@ -63,7 +63,9 @@ Da PowerShell, dalla cartella `lezione_4/` (comandi verificati; dettagli nel `RE
 - caricare `.env` nella sessione:
   `Get-Content .env | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Object { $k, $v = $_ -split '=', 2; Set-Item "env:$($k.Trim())" $v.Trim() }`;
 - avvio locale: `.\.venv\Scripts\python -m assistente`;
-- avvio Docker: `docker compose build`, poi `docker compose run --rm assistente`;
+- avvio Docker (verificato, input da pipe): `docker compose build`, poi
+  `"Che ore sono?", "/esci" | docker compose run --rm -T assistente`;
+- avvio Docker interattivo con TTY, da verificare a mano dall'utente: `docker compose run --rm assistente`;
 - test automatici: `.\.venv\Scripts\python -m pytest -v`;
 - test nel container: `docker compose run --rm assistente python -m pytest -v`;
 - prova reale con LM Studio: `.\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -v -s`.

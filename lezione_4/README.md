@@ -60,21 +60,28 @@ In locale, dopo aver caricato `.env`:
 ```
 
 Con Docker Compose (legge `.env` con `env_file` e imposta da solo l'indirizzo
-`host.docker.internal`):
+`host.docker.internal`). Costruzione dell'immagine e sessione con input da pipe, entrambe verificate:
 
 ```powershell
 docker compose build
+"Che ore sono?", "/esci" | docker compose run --rm -T assistente
+```
+
+Sessione interattiva con terminale (TTY), **da verificare a mano dall'utente**: non è stata eseguita
+con una tastiera reale.
+
+```powershell
 docker compose run --rm assistente
 ```
 
-Si esce con `/esci`, Ctrl+C o fine input (Ctrl+Z e Invio su Windows). Le chiamate agli strumenti
-compaiono nei log su stderr, per esempio `chiamata strumento ora_corrente con argomenti {...}`.
+In locale si esce con `/esci`. Le chiamate agli strumenti compaiono nei log su stderr, per esempio
+`chiamata strumento ora_corrente con argomenti {...}`. Ctrl+C e Ctrl+D (Ctrl+Z e Invio su Windows)
+sono previsti dalla specifica ma **da verificare a mano dall'utente**.
 
-Sessione non interattiva (verificata, utile per prove rapide):
+Sessione locale con input da pipe (verificata):
 
 ```powershell
 "Che ore sono?", "E a New York?", "/esci" | .\.venv\Scripts\python -m assistente
-"Che ore sono?", "/esci" | docker compose run --rm -T assistente
 ```
 
 ## Test
@@ -143,7 +150,9 @@ Il limite è `MAX_PASSAGGI_STRUMENTI`. Il codice è in `assistente/grafo.py`.
 
 **Il modello non chiama lo strumento:** l'ora risulta inventata e nei log manca la riga
 `chiamata strumento`. Controllare che `LMSTUDIO_MODEL` sia il modello di chat previsto
-(`google/gemma-4-e2b`), poi riprovare con `--lmstudio` e `LOG_LEVEL=DEBUG`.
+(`google/gemma-4-e2b`), poi riprovare la prova reale mostrando i log in tempo reale:
+`.\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -v -s --log-cli-level=INFO`
+(`LOG_LEVEL` agisce solo sull'avvio dell'applicazione, non su pytest).
 Il comportamento dipende dal modello: solo la prova reale lo conferma.
 
 **Variabile mancante:** l'avvio si ferma con «Variabile d'ambiente obbligatoria mancante o vuota: NOME».

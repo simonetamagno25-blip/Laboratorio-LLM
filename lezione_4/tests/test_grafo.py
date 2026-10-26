@@ -121,3 +121,51 @@ def test_log_della_chiamata(caplog):
     assert "ora_corrente" in testo
     assert "Europe/Rome" in testo
     assert "2026-10-26T17:05:12+01:00" in testo
+
+
+def chiamata_non_valida(id: str = "bad_1") -> AIMessage:
+    return AIMessage(
+        content="",
+        invalid_tool_calls=[
+            {
+                "name": "ora_corrente",
+                "args": "{fuso_orario: Europe/Rome",
+                "id": id,
+                "error": "JSON non valido",
+                "type": "invalid_tool_call",
+            }
+        ],
+    )
+
+
+def test_instradamento_con_chiamate_non_valide_va_agli_strumenti():
+    stato = {"messages": [chiamata_non_valida()], "passaggi_strumenti": 0}
+    assert instrada_dopo_modello(stato, 3) == "strumenti"
+
+
+def test_instradamento_con_chiamate_non_valide_al_limite():
+    stato = {"messages": [chiamata_non_valida()], "passaggi_strumenti": 3}
+    assert instrada_dopo_modello(stato, 3) == "limite_raggiunto"
+
+
+def test_chiamata_non_valida_diventa_messaggio_di_errore(caplog):
+    modello, grafo = crea([chiamata_non_valida(), AIMessage("ok")])
+    with caplog.at_level(logging.WARNING, logger="assistente.grafo"):
+        stato = invoca(grafo, "Che ore sono?")
+    assert len(modello.chiamate) == 2
+    risultati = [m for m in modello.chiamate[1] if isinstance(m, ToolMessage)]
+    assert len(risultati) == 1
+    assert risultati[0].tool_call_id == "bad_1"
+    assert risultati[0].name == "ora_corrente"
+    assert risultati[0].content.startswith("Errore")
+    assert stato["messages"][-1].content == "ok"
+    assert "argomenti non validi" in caplog.text
+
+
+def test_limite_con_chiamata_non_valida_non_lascia_chiamate_senza_risposta():
+    _, grafo = crea([chiamata_non_valida()], max_passaggi=1)
+    stato = {"messages": [HumanMessage("Che ore sono?")], "passaggi_strumenti": 1}
+    risultato = grafo.invoke(stato, {"recursion_limit": limite_ricorsione(1)})
+    messaggi = risultato["messages"]
+    assert messaggi[-1].content == MESSAGGIO_LIMITE
+    assert not any(isinstance(m, AIMessage) and m.invalid_tool_calls for m in messaggi)

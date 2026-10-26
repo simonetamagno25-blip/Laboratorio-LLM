@@ -42,7 +42,8 @@ def prompt_di_sistema(fuso_predefinito: str) -> str:
 def instrada_dopo_modello(
     stato: StatoConversazione, max_passaggi: int
 ) -> Literal["strumenti", "limite_raggiunto", "__end__"]:
-    if not stato["messages"][-1].tool_calls:
+    ultimo = stato["messages"][-1]
+    if not (ultimo.tool_calls or ultimo.invalid_tool_calls):
         return "__end__"
     if stato["passaggi_strumenti"] >= max_passaggi:
         return "limite_raggiunto"
@@ -67,6 +68,21 @@ def costruisci_grafo(
 
     def nodo_strumenti(stato: StatoConversazione) -> dict:
         risultati = []
+        # Chiamate con argomenti non JSON: vanno comunque risposte, altrimenti
+        # restano senza ToolMessage nella cronologia.
+        for non_valida in stato["messages"][-1].invalid_tool_calls:
+            log.warning(
+                "chiamata strumento %s con argomenti non validi: %s",
+                non_valida["name"],
+                non_valida["args"],
+            )
+            risultati.append(
+                ToolMessage(
+                    content=f"Errore: argomenti non validi: {non_valida['args']}",
+                    tool_call_id=non_valida["id"],
+                    name=non_valida["name"],
+                )
+            )
         for chiamata in stato["messages"][-1].tool_calls:
             nome, args = chiamata["name"], chiamata["args"]
             log.info("chiamata strumento %s con argomenti %s", nome, args)

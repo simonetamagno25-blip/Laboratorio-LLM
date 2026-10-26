@@ -1,0 +1,3 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["lmstudio: prova reale con LM Studio, richiede --lmstudio"]

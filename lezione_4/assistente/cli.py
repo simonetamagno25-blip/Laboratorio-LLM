@@ -37,5 +37,8 @@ def esegui_ciclo(sessione: Sessione, base_url: str, leggi=input, scrivi=print) -
             return
         try:
             scrivi("Assistente> " + sessione.chiedi(riga))
+        except KeyboardInterrupt:
+            scrivi("Arrivederci.")
+            return
         except Exception as errore:
             scrivi(descrivi_errore(errore, base_url))

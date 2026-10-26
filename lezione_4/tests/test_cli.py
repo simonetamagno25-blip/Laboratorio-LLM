@@ -87,3 +87,15 @@ def test_errore_mostrato_e_ciclo_continua():
     out = ciclo(sessione, ["a", "b", "/esci"])
     assert "Errore durante la risposta: giù" in out
     assert out.index("Errore durante la risposta: giù") < out.index("Assistente> ok")
+
+
+class ModelloInterrotto:
+    def invoke(self, messaggi, config=None):
+        raise KeyboardInterrupt
+
+
+def test_ctrl_c_durante_la_risposta_esce_pulito():
+    grafo = costruisci_grafo(ModelloInterrotto(), crea_strumenti(AUTUNNO), "Europe/Rome", 3)
+    sessione = Sessione(grafo, limite_ricorsione(3))
+    assert "Arrivederci." in ciclo(sessione, ["ciao"])
+    assert sessione.cronologia == []

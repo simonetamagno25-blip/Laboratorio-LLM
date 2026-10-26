@@ -1,5 +1,6 @@
 """Lettura e validazione della configurazione dalle variabili d'ambiente."""
 
+import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -54,5 +55,7 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
         )
 
     log_level = (env.get("LOG_LEVEL", "").strip() or "INFO").upper()
+    if log_level not in logging.getLevelNamesMapping():
+        raise ErroreConfigurazione(f"LOG_LEVEL non valido: {log_level!r}")
 
     return Configurazione(base_url, modello, fuso, max_passaggi, log_level)

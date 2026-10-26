@@ -46,3 +46,9 @@ def test_valori_ripuliti_e_log_level_maiuscolo():
     assert c.modello == "m"
     assert c.log_level == "DEBUG"
     assert c.max_passaggi_strumenti == 5
+
+
+def test_log_level_non_valido():
+    env = {**BASE, "LOG_LEVEL": "verbose"}
+    with pytest.raises(ErroreConfigurazione, match="LOG_LEVEL"):
+        carica_configurazione(env)

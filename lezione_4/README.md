@@ -27,7 +27,7 @@ Il file `.env` non va in Git. Le variabili sono:
 | `LMSTUDIO_MODEL` | sì | `google/gemma-4-e2b` |
 | `FUSO_ORARIO_PREDEFINITO` | no | `Europe/Rome` |
 | `MAX_PASSAGGI_STRUMENTI` | no | `3` |
-| `LOG_LEVEL` | no | `INFO` |
+| `LOG_LEVEL` | no | `INFO` (valori: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
 
 L'identificativo del modello è quello restituito dal server:
 

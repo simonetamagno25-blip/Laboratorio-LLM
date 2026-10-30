@@ -109,7 +109,10 @@ solo la prova reale e le sessioni reali lo fanno.
 
 ## Checklist manuale
 
-Da eseguire in una sessione reale, in locale e in Docker, controllando anche i log:
+Da eseguire in una sessione reale, in locale e in Docker, controllando anche i log. Tutte le voci
+sono state verificate con `google/gemma-4-e2b`. Per la voce 4 con una domanda generica su Marte il
+modello non chiama lo strumento: per provare l'errore serve una richiesta esplicita, per esempio
+"Usa lo strumento ora_corrente con il fuso orario Marte/Base".
 
 1. Domanda sull'ora senza luogo ("Che ore sono?"): una chiamata a `ora_corrente` con il fuso predefinito
    (`Europe/Rome`) e una risposta con l'ora restituita.

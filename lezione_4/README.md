@@ -67,16 +67,16 @@ docker compose build
 "Che ore sono?", "/esci" | docker compose run --rm -T assistente
 ```
 
-Sessione interattiva con terminale (TTY), **da verificare a mano dall'utente**: non è stata eseguita
-con una tastiera reale.
+Sessione interattiva con terminale (TTY), verificata a mano con una tastiera reale:
 
 ```powershell
 docker compose run --rm assistente
 ```
 
-In locale si esce con `/esci`. Le chiamate agli strumenti compaiono nei log su stderr, per esempio
-`chiamata strumento ora_corrente con argomenti {...}`. Ctrl+C e Ctrl+D (Ctrl+Z e Invio su Windows)
-sono previsti dalla specifica ma **da verificare a mano dall'utente**.
+Si esce con `/esci`, con Ctrl+C (anche durante una risposta) o chiudendo l'input: Ctrl+Z e Invio
+in PowerShell in locale, Ctrl+D nel container. Tutti verificati a mano, con un'eccezione: nel
+terminale integrato di VS Code Ctrl+Z non chiude l'input (vedi Diagnosi). Le chiamate agli strumenti
+compaiono nei log su stderr, per esempio `chiamata strumento ora_corrente con argomenti {...}`.
 
 Sessione locale con input da pipe (verificata):
 
@@ -157,4 +157,8 @@ Il comportamento dipende dal modello: solo la prova reale lo conferma.
 
 **Variabile mancante:** l'avvio si ferma con «Variabile d'ambiente obbligatoria mancante o vuota: NOME».
 In locale caricare `.env` con la riga PowerShell della sezione Configurazione. In Docker verificare
-che `.env` esista.
+che `.env` esista. Ogni nuova finestra di PowerShell richiede di caricare di nuovo `.env`.
+
+**Ctrl+Z non chiude la sessione nel terminale di VS Code:** il terminale integrato non trasmette Ctrl+Z
+come fine dell'input, e il carattere arriva all'assistente come testo. Nella finestra di PowerShell
+normale Ctrl+Z e Invio funzionano. Nel terminale di VS Code usare `/esci` o Ctrl+C.

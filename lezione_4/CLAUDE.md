@@ -65,7 +65,7 @@ Da PowerShell, dalla cartella `lezione_4/` (comandi verificati, salvo dove indic
 - avvio locale: `.\.venv\Scripts\python -m assistente`;
 - avvio Docker (verificato, input da pipe): `docker compose build`, poi
   `"Che ore sono?", "/esci" | docker compose run --rm -T assistente`;
-- avvio Docker interattivo con TTY, da verificare a mano dall'utente: `docker compose run --rm assistente`;
+- avvio Docker interattivo con TTY (verificato a mano): `docker compose run --rm assistente`;
 - test automatici: `.\.venv\Scripts\python -m pytest -v`;
 - test nel container: `docker compose run --rm assistente python -m pytest -v`;
 - prova reale con LM Studio: `.\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -v -s`.

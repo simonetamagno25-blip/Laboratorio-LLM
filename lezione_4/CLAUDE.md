@@ -13,7 +13,7 @@ Un'applicazione da terminale in Python che conversa con un modello locale e:
 - si avvia anche con Docker Compose.
 
 ## Confini
-- Implementare solo i requisiti concordati. Altri strumenti, MCP, workflow e RAG arriveranno
+- Implementare solo i requisiti concordati. Altri strumenti, workflow e RAG arriveranno
   nelle lezioni successive: non anticiparli.
 - Niente interfacce grafiche, servizi cloud o framework non concordati.
 - Lavorare solo dentro `lezione_4/`. La repository contiene altre lezioni:

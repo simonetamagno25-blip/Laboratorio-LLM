@@ -62,9 +62,11 @@ Da PowerShell, dalla cartella `lezione_4/` (comandi verificati, salvo dove indic
 - ambiente: `py -m venv .venv` poi `.\.venv\Scripts\python -m pip install -r requirements-dev.txt`;
 - caricare `.env` nella sessione:
   `Get-Content .env | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Object { $k, $v = $_ -split '=', 2; Set-Item "env:$($k.Trim())" $v.Trim() }`;
+- servizio API di giorni e scadenze (da avviare prima, in un'altra finestra): `.\.venv\Scripts\python -m scadenze_api`;
 - avvio locale: `.\.venv\Scripts\python -m assistente`;
 - avvio Docker (verificato, input da pipe): `docker compose build`, poi
-  `"Che ore sono?", "/esci" | docker compose run --rm -T assistente`;
+  `"Che ore sono?", "/esci" | docker compose run --rm -T assistente`; alla fine `docker compose down`
+  (ferma anche il servizio `scadenze`);
 - avvio Docker interattivo con TTY (verificato a mano): `docker compose run --rm assistente`;
 - test automatici: `.\.venv\Scripts\python -m pytest -v`;
 - test nel container: `docker compose run --rm assistente python -m pytest -v`;

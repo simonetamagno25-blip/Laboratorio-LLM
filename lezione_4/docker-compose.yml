@@ -4,7 +4,16 @@ services:
     env_file: .env
     environment:
       LMSTUDIO_BASE_URL: http://host.docker.internal:1234/v1
+      SCADENZE_API_URL: http://scadenze:8000
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      - scadenze
     stdin_open: true
     tty: true
+
+  scadenze:
+    build: .
+    command: ["python", "-m", "scadenze_api"]
+    environment:
+      SCADENZE_API_PORTA: "8000"

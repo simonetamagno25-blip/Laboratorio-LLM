@@ -48,3 +48,17 @@ def test_avvio_con_tutti_gli_strumenti(monkeypatch, capsys):
         "giorni_tra_date",
         "calcola_scadenza",
     ]
+
+
+def test_ctrl_c_durante_l_avvio_del_server_mcp(monkeypatch):
+    for nome, valore in ENV.items():
+        monkeypatch.setenv(nome, valore)
+    chiuso = []
+
+    def interrotto(self):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(punto_di_ingresso.ClientMCP, "avvia", interrotto)
+    monkeypatch.setattr(punto_di_ingresso.ClientMCP, "chiudi", lambda self: chiuso.append(True))
+    assert punto_di_ingresso.main() == 130
+    assert chiuso

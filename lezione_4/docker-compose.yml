@@ -16,4 +16,5 @@ services:
     build: .
     command: ["python", "-m", "scadenze_api"]
     environment:
+      SCADENZE_API_HOST: 0.0.0.0
       SCADENZE_API_PORTA: "8000"

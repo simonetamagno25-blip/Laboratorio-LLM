@@ -40,6 +40,7 @@ Il file `.env` non va in Git. Le variabili sono:
 | `LOG_LEVEL` | no | `INFO` (valori: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
 | `SCADENZE_API_URL` | sì | in locale `http://localhost:8000`; in Docker `http://scadenze:8000` (da `docker-compose.yml`) |
 | `SCADENZE_API_PORTA` | no | `8000` (porta del servizio `scadenze_api`) |
+| `SCADENZE_API_HOST` | no | `127.0.0.1` (solo questo computer); in Docker `0.0.0.0` (da `docker-compose.yml`) |
 
 L'identificativo del modello è quello restituito dal server:
 

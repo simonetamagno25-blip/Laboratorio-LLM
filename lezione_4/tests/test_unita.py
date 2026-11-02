@@ -60,3 +60,8 @@ def test_unita_sconosciuta_elenca_le_ammesse():
 
 def test_ogni_unita_ammessa_ha_una_grandezza():
     assert set(get_args(Unita)) == set(GRANDEZZE)
+
+
+@pytest.mark.parametrize("valore, da, a", [(1e308, "mi", "mm"), (1e308, "F", "C")])
+def test_risultato_non_finito_rifiutato(valore, da, a):
+    assert descrivi_conversione(valore, da, a).startswith("Errore:")

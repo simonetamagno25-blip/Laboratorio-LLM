@@ -78,3 +78,18 @@ def test_errore_interno(servizio_scadenze, monkeypatch):
     )
     assert risposta.status_code == 500
     assert risposta.json() == {"errore": "errore interno"}
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "inizio=2026-01-01&giorni=" + "9" * 5000,
+        "inizio=2026-01-01&giorni=%C2%B2",
+        "inizio=9999-12-31&giorni=1",
+    ],
+    ids=["intero-enorme", "cifra-unicode", "oltre-anno-9999"],
+)
+def test_input_estremi_danno_400(servizio_scadenze, query):
+    risposta = httpx.get(f"{servizio_scadenze}/scadenza?{query}")
+    assert risposta.status_code == 400
+    assert risposta.json()["errore"]

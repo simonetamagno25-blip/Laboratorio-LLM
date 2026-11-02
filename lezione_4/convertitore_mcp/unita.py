@@ -78,8 +78,12 @@ def converti(valore: float, da: str, a: str) -> float:
         # Tolleranza per gli arrotondamenti di -273.15 C e -459.67 F.
         if kelvin < -1e-9:
             raise ErroreConversione(f"{valore} {da} è sotto lo zero assoluto")
-        return _da_kelvin(max(kelvin, 0.0), a)
-    return valore * fattore_da / fattore_a
+        risultato = _da_kelvin(max(kelvin, 0.0), a)
+    else:
+        risultato = valore * fattore_da / fattore_a
+    if not math.isfinite(risultato):
+        raise ErroreConversione(f"risultato non finito convertendo {valore:g} {da} in {a}")
+    return risultato
 
 
 def descrivi_conversione(valore: float, da: str, a: str) -> str:

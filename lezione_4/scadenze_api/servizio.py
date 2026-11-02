@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -35,8 +36,9 @@ def _booleano(valore: str) -> bool:
 
 
 def _intero(valore: str) -> int:
-    if not valore.lstrip("-").isdigit():
-        raise ErroreRichiesta(f"giorni deve essere un numero intero: {valore!r}")
+    # Solo cifre ASCII e lunghezza limitata: int() rifiuterebbe altrimenti con errori interni.
+    if not re.fullmatch(r"-?[0-9]{1,6}", valore):
+        raise ErroreRichiesta(f"giorni deve essere un numero intero: {valore[:20]!r}")
     return int(valore)
 
 

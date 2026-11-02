@@ -13,7 +13,7 @@ NOMI_GIORNI = ("lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sab
 
 Festivita = dict[int, dict[date, str]]
 
-_FORMATO_ISO = re.compile(r"\d{4}-\d{2}-\d{2}")
+_FORMATO_ISO = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
 
 class ErroreScadenze(ValueError):
@@ -79,6 +79,8 @@ def calcola_scadenza(
     da = leggi_data(inizio)
     if not 0 <= giorni <= GIORNI_MASSIMI:
         raise ErroreScadenze(f"i giorni devono essere tra 0 e {GIORNI_MASSIMI}: {giorni}")
+    if da.toordinal() + giorni > date.max.toordinal():
+        raise ErroreScadenze(f"la scadenza supera il {date.max.isoformat()}")
     festivita = festivita or carica_festivita()
     if solo_lavorativi:
         scadenza, contati = da, 0

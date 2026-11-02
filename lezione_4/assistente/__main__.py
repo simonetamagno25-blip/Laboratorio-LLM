@@ -33,6 +33,10 @@ def main() -> int:
     except ErroreMCP as errore:
         print(f"Server MCP del convertitore non avviato: {errore}", file=sys.stderr)
         return 3
+    except KeyboardInterrupt:
+        client_mcp.chiudi()
+        print("Arrivederci.")
+        return 130
 
     # Il try/finally chiude il server MCP anche con Ctrl+C o errori imprevisti.
     try:

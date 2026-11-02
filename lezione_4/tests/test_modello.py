@@ -26,7 +26,9 @@ def test_descrivi_errore_generico():
 
 
 def test_crea_modello_e_un_runnable():
-    config = Configurazione("http://localhost:1234/v1", "m", "Europe/Rome", 3, "INFO")
+    config = Configurazione(
+        "http://localhost:1234/v1", "m", "Europe/Rome", 3, "INFO", "http://localhost:8000"
+    )
     assert isinstance(crea_modello(config, crea_strumenti()), Runnable)
 
 

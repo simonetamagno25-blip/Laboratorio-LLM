@@ -4,6 +4,7 @@ import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -18,6 +19,7 @@ class Configurazione:
     fuso_predefinito: str
     max_passaggi_strumenti: int
     log_level: str
+    scadenze_api_url: str
 
 
 def _obbligatoria(env: Mapping[str, str], nome: str) -> str:
@@ -58,4 +60,9 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
     if log_level not in logging.getLevelNamesMapping():
         raise ErroreConfigurazione(f"LOG_LEVEL non valido: {log_level!r}")
 
-    return Configurazione(base_url, modello, fuso, max_passaggi, log_level)
+    scadenze_api_url = _obbligatoria(env, "SCADENZE_API_URL").rstrip("/")
+    parti = urlsplit(scadenze_api_url)
+    if parti.scheme not in ("http", "https") or not parti.netloc:
+        raise ErroreConfigurazione(f"SCADENZE_API_URL non valido: {scadenze_api_url!r}")
+
+    return Configurazione(base_url, modello, fuso, max_passaggi, log_level, scadenze_api_url)

@@ -35,6 +35,12 @@ def prompt_di_sistema(fuso_predefinito: str) -> str:
         "Per qualsiasi domanda su data e ora usa sempre lo strumento ora_corrente "
         "e non inventare mai l'ora. "
         f"Se l'utente non indica un luogo, usa il fuso orario {fuso_predefinito}. "
+        "Per i calcoli usa sempre lo strumento calcola e non calcolare a mente. "
+        "Per le conversioni tra unità di misura usa converti_unita. "
+        "Per contare i giorni tra due date usa giorni_tra_date e per le scadenze "
+        "calcola_scadenza, con le date nel formato AAAA-MM-GG. "
+        "Se uno strumento risponde con un errore, spiega all'utente il motivo "
+        "senza inventare un risultato. "
         "Rispondi sempre in italiano."
     )
 

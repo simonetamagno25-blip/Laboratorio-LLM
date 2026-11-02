@@ -29,8 +29,18 @@ def test_fuso_non_valido(fuso):
     assert formatta_ora(fuso, AUTUNNO) == f"Fuso orario non valido: {fuso!r}"
 
 
+def test_strumenti_locali_esposti():
+    assert [s.name for s in crea_strumenti(AUTUNNO)] == ["ora_corrente", "calcola"]
+
+
+def test_calcolatrice_esposta():
+    calcolatrice = crea_strumenti(AUTUNNO)[1]
+    assert set(calcolatrice.args) == {"espressione"}
+    assert calcolatrice.invoke({"espressione": "2 + 2"}) == "2 + 2 = 4"
+
+
 def test_strumento_esposto():
-    [s] = crea_strumenti(AUTUNNO)
+    s = crea_strumenti(AUTUNNO)[0]
     assert s.name == "ora_corrente"
     assert set(s.args) == {"fuso_orario"}
     assert s.invoke({"fuso_orario": "Europe/Rome"}) == "2026-10-26T17:05:12+01:00 (Europe/Rome)"

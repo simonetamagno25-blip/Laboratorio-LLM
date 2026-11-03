@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from langchain_core.tools import BaseTool, StructuredTool
 
 from assistente.calcolatrice import calcola
+from assistente.catalogo import Catalogo, carica_catalogo, cerca_articoli, dettaglio_articolo
 
 Orologio = Callable[[], datetime]
 
@@ -24,9 +25,20 @@ def formatta_ora(fuso_orario: str, adesso: Orologio) -> str:
     return f"{locale.isoformat(timespec='seconds')} ({fuso_orario})"
 
 
-def crea_strumenti(adesso: Orologio = adesso_utc) -> list[BaseTool]:
+def crea_strumenti(
+    adesso: Orologio = adesso_utc, catalogo: Catalogo | None = None
+) -> list[BaseTool]:
+    if catalogo is None:
+        catalogo = carica_catalogo()
+
     def ora_corrente(fuso_orario: str) -> str:
         return formatta_ora(fuso_orario, adesso)
+
+    def cerca(testo: str = "", categoria: str = "") -> str:
+        return cerca_articoli(catalogo, testo, categoria)
+
+    def dettaglio(codice: str) -> str:
+        return dettaglio_articolo(catalogo, codice)
 
     strumento = StructuredTool.from_function(
         func=ora_corrente,
@@ -45,4 +57,24 @@ def crea_strumenti(adesso: Orologio = adesso_utc) -> list[BaseTool]:
             "Usalo sempre per i calcoli invece di farli a mente."
         ),
     )
-    return [strumento, calcolatrice]
+    ricerca = StructuredTool.from_function(
+        func=cerca,
+        name="cerca_articoli",
+        description=(
+            "Cerca nel catalogo del materiale del laboratorio per parole chiave e/o categoria. "
+            "Usa una o due parole chiave brevi, al singolare (per esempio temperatura, cavo). "
+            "Categorie: schede, sensori, attuatori, cavi, alimentazione, strumenti di misura. "
+            "Restituisce codice, nome e quantità; per descrizione e posizione usa "
+            "dettaglio_articolo."
+        ),
+    )
+    scheda = StructuredTool.from_function(
+        func=dettaglio,
+        name="dettaglio_articolo",
+        description=(
+            "Restituisce la scheda completa di un articolo del catalogo dato il suo codice, "
+            "per esempio SEN-004, con descrizione, quantità e posizione. "
+            "Se non conosci il codice usa prima cerca_articoli."
+        ),
+    )
+    return [strumento, calcolatrice, ricerca, scheda]

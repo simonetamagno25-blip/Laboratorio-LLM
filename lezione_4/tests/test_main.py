@@ -1,6 +1,7 @@
 import sys
 
 import assistente.__main__ as punto_di_ingresso
+from assistente.catalogo import ErroreCatalogo
 
 ENV = {
     "LMSTUDIO_BASE_URL": "http://localhost:1234/v1",
@@ -44,10 +45,27 @@ def test_avvio_con_tutti_gli_strumenti(monkeypatch, capsys):
     assert nomi == [
         "ora_corrente",
         "calcola",
+        "cerca_articoli",
+        "dettaglio_articolo",
         "converti_unita",
         "giorni_tra_date",
         "calcola_scadenza",
     ]
+
+
+def test_catalogo_non_valido_blocca_l_avvio(monkeypatch, capsys):
+    for nome, valore in ENV.items():
+        monkeypatch.setenv(nome, valore)
+    avviato = []
+
+    def catalogo_rotto():
+        raise ErroreCatalogo("articolo 3: codice duplicato")
+
+    monkeypatch.setattr(punto_di_ingresso, "carica_catalogo", catalogo_rotto)
+    monkeypatch.setattr(punto_di_ingresso.ClientMCP, "avvia", lambda self: avviato.append(True))
+    assert punto_di_ingresso.main() == 4
+    assert "Catalogo non valido: articolo 3" in capsys.readouterr().err
+    assert not avviato
 
 
 def test_ctrl_c_durante_l_avvio_del_server_mcp(monkeypatch):

@@ -1,0 +1,162 @@
+[
+  {
+    "codice": "SCH-001",
+    "nome": "Scheda Arduino Uno R3",
+    "categoria": "schede",
+    "descrizione": "Microcontrollore ATmega328P con 14 pin digitali e 6 ingressi analogici.",
+    "quantita": 12,
+    "posizione": "Armadio A, ripiano 1"
+  },
+  {
+    "codice": "SCH-002",
+    "nome": "Scheda Arduino Nano",
+    "categoria": "schede",
+    "descrizione": "Versione compatta di Arduino, adatta alle breadboard.",
+    "quantita": 8,
+    "posizione": "Armadio A, ripiano 1"
+  },
+  {
+    "codice": "SCH-003",
+    "nome": "Scheda ESP32 DevKit",
+    "categoria": "schede",
+    "descrizione": "Microcontrollore con Wi-Fi e Bluetooth integrati.",
+    "quantita": 5,
+    "posizione": "Armadio A, ripiano 2"
+  },
+  {
+    "codice": "SCH-004",
+    "nome": "Raspberry Pi 4 Model B",
+    "categoria": "schede",
+    "descrizione": "Computer a scheda singola con 4 GB di RAM.",
+    "quantita": 0,
+    "posizione": "Armadio A, ripiano 2"
+  },
+  {
+    "codice": "SEN-001",
+    "nome": "Sensore di temperatura DS18B20",
+    "categoria": "sensori",
+    "descrizione": "Sonda digitale impermeabile, da -55 a 125 °C.",
+    "quantita": 10,
+    "posizione": "Armadio B, ripiano 1"
+  },
+  {
+    "codice": "SEN-002",
+    "nome": "Sensore di temperatura LM35",
+    "categoria": "sensori",
+    "descrizione": "Sensore analogico con uscita di 10 mV per grado Celsius.",
+    "quantita": 15,
+    "posizione": "Armadio B, ripiano 1"
+  },
+  {
+    "codice": "SEN-003",
+    "nome": "Sensore a ultrasuoni HC-SR04",
+    "categoria": "sensori",
+    "descrizione": "Misura la distanza da 2 a 400 cm.",
+    "quantita": 9,
+    "posizione": "Armadio B, ripiano 2"
+  },
+  {
+    "codice": "SEN-004",
+    "nome": "Sensore di temperatura e umidità DHT22",
+    "categoria": "sensori",
+    "descrizione": "Misura temperatura (-40…80 °C) e umidità relativa (0…100 %).",
+    "quantita": 6,
+    "posizione": "Armadio B, ripiano 2"
+  },
+  {
+    "codice": "SEN-005",
+    "nome": "Fotoresistenza LDR",
+    "categoria": "sensori",
+    "descrizione": "Resistenza che varia con la luce ambientale.",
+    "quantita": 30,
+    "posizione": "Armadio B, ripiano 3"
+  },
+  {
+    "codice": "SEN-006",
+    "nome": "Sensore di movimento PIR HC-SR501",
+    "categoria": "sensori",
+    "descrizione": "Rileva il movimento di persone fino a circa 7 metri.",
+    "quantita": 4,
+    "posizione": "Armadio B, ripiano 3"
+  },
+  {
+    "codice": "ATT-001",
+    "nome": "Servomotore SG90",
+    "categoria": "attuatori",
+    "descrizione": "Micro servo con rotazione di 180 gradi.",
+    "quantita": 14,
+    "posizione": "Armadio C, ripiano 1"
+  },
+  {
+    "codice": "ATT-002",
+    "nome": "Motore passo-passo 28BYJ-48 con driver ULN2003",
+    "categoria": "attuatori",
+    "descrizione": "Motore passo-passo a 5 V fornito con la sua scheda driver.",
+    "quantita": 6,
+    "posizione": "Armadio C, ripiano 1"
+  },
+  {
+    "codice": "ATT-003",
+    "nome": "Modulo relè a 2 canali",
+    "categoria": "attuatori",
+    "descrizione": "Comanda carichi fino a 10 A con un segnale a 5 V.",
+    "quantita": 7,
+    "posizione": "Armadio C, ripiano 2"
+  },
+  {
+    "codice": "CAV-001",
+    "nome": "Cavi jumper maschio-maschio (confezione da 40)",
+    "categoria": "cavi",
+    "descrizione": "Cavetti colorati da 20 cm per breadboard.",
+    "quantita": 25,
+    "posizione": "Cassettiera D, cassetto 1"
+  },
+  {
+    "codice": "CAV-002",
+    "nome": "Cavo USB-A / USB-B",
+    "categoria": "cavi",
+    "descrizione": "Cavo da 1 m per collegare Arduino Uno al computer.",
+    "quantita": 12,
+    "posizione": "Cassettiera D, cassetto 2"
+  },
+  {
+    "codice": "CAV-003",
+    "nome": "Cavo USB-C",
+    "categoria": "cavi",
+    "descrizione": "Cavo da 1 m per alimentazione e dati.",
+    "quantita": 10,
+    "posizione": "Cassettiera D, cassetto 2"
+  },
+  {
+    "codice": "ALI-001",
+    "nome": "Alimentatore da banco 0-30 V 5 A",
+    "categoria": "alimentazione",
+    "descrizione": "Alimentatore regolabile con limitazione di corrente.",
+    "quantita": 3,
+    "posizione": "Banco 2"
+  },
+  {
+    "codice": "ALI-002",
+    "nome": "Portabatterie 4xAA",
+    "categoria": "alimentazione",
+    "descrizione": "Fornisce 6 V con quattro pile stilo.",
+    "quantita": 18,
+    "posizione": "Cassettiera D, cassetto 3"
+  },
+  {
+    "codice": "MIS-001",
+    "nome": "Multimetro digitale",
+    "categoria": "strumenti di misura",
+    "descrizione": "Misura tensione, corrente, resistenza e continuità.",
+    "quantita": 8,
+    "posizione": "Armadio E, ripiano 1"
+  },
+  {
+    "codice": "MIS-002",
+    "nome": "Oscilloscopio digitale a 2 canali",
+    "categoria": "strumenti di misura",
+    "descrizione": "Banda passante 100 MHz, schermo a colori.",
+    "quantita": 2,
+    "posizione": "Banco 1"
+  }
+]

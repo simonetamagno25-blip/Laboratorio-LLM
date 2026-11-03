@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
+from assistente.catalogo import Articolo
 from assistente.strumenti import crea_strumenti, formatta_ora
 
 AUTUNNO = lambda: datetime(2026, 10, 26, 16, 5, 12, tzinfo=timezone.utc)
@@ -30,7 +31,29 @@ def test_fuso_non_valido(fuso):
 
 
 def test_strumenti_locali_esposti():
-    assert [s.name for s in crea_strumenti(AUTUNNO)] == ["ora_corrente", "calcola"]
+    assert [s.name for s in crea_strumenti(AUTUNNO)] == [
+        "ora_corrente",
+        "calcola",
+        "cerca_articoli",
+        "dettaglio_articolo",
+    ]
+
+
+def test_strumenti_del_catalogo_esposti():
+    _, _, cerca, dettaglio = crea_strumenti(AUTUNNO)
+    assert set(cerca.args) == {"testo", "categoria"}
+    assert set(dettaglio.args) == {"codice"}
+    assert "al singolare" in cerca.description
+    assert "cerca_articoli" in dettaglio.description
+
+
+def test_strumenti_usano_il_catalogo_passato():
+    catalogo = (
+        Articolo("SEN-001", "Sensore di temperatura", "sensori", "Sonda.", 2, "Banco 3"),
+    )
+    _, _, cerca, dettaglio = crea_strumenti(AUTUNNO, catalogo=catalogo)
+    assert "Articoli trovati: 1" in cerca.invoke({"testo": "temperatura"})
+    assert "posizione: Banco 3" in dettaglio.invoke({"codice": "SEN-001"})
 
 
 def test_calcolatrice_esposta():

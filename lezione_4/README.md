@@ -10,6 +10,7 @@ Gli strumenti sono collegati con tre meccanismi diversi, per confrontarli:
 |---|---|---|
 | `ora_corrente` (fuso orario esplicito) | tool locale | `assistente/strumenti.py` |
 | `calcola` (calcolatrice sicura, senza `eval`) | tool locale | `assistente/calcolatrice.py` |
+| `cerca_articoli`, `dettaglio_articolo` (catalogo del laboratorio) | tool locale | `assistente/catalogo.py`, dati in `assistente/dati/catalogo.json` |
 | `converti_unita` (unità come elenco chiuso) | server MCP via stdio | `convertitore_mcp/`, avviato dall'assistente come sottoprocesso |
 | `giorni_tra_date`, `calcola_scadenza` | API HTTP | servizio `scadenze_api/`, chiamato con `httpx` da `assistente/client_api.py` |
 
@@ -134,9 +135,12 @@ Prova reale con LM Studio, attivata esplicitamente (richiede il server e `.env` 
 .\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -v -s
 ```
 
-La prova reale fa una domanda per ogni nuovo strumento (calcolo, conversione, giorni lavorativi)
-e una conversione impossibile; avvia da sola il servizio delle scadenze su una porta libera e il server MCP.
-Verificata con `google/gemma-4-e2b`: 5 test superati.
+La prova reale fa una domanda per ogni strumento (ora, calcolo, conversione, giorni lavorativi),
+una conversione impossibile e cinque domande sul catalogo (ricerca, dettaglio, ricerca seguita da
+dettaglio, nessun risultato, codice inesistente); avvia da sola il servizio delle scadenze su una
+porta libera e il server MCP. Le prove controllano quali strumenti vengono chiamati e con quali
+argomenti; le risposte finali sono stampate (`-s`) e vanno lette a occhio per verificare che il
+modello non inventi articoli. Verificata con `google/gemma-4-e2b`: 10 test superati.
 
 Una risposta simulata nei test automatici non dimostra che il modello locale sappia usare lo strumento:
 solo la prova reale e le sessioni reali lo fanno.
@@ -157,6 +161,35 @@ che non risponde in tempo.
   incluso. I giorni lavorativi escludono sabato, domenica e le festività nazionali del file
   `scadenze_api/dati/festivita_it.json` (anni 2026 e 2027; fonte: legge 260/1949 e successive
   modifiche, legge 151/2025 per il 4 ottobre). Il risultato è indicativo e non ha valore normativo.
+- **Catalogo:** sola lettura, dal file `assistente/dati/catalogo.json` (vedi sotto).
+
+## Catalogo del laboratorio
+
+Il file `assistente/dati/catalogo.json` è una lista di articoli con i campi `codice`, `nome`,
+`categoria`, `descrizione`, `quantita` (intero ≥ 0) e `posizione`. Categorie e prefissi del codice
+(formato `AAA-000`):
+
+| Prefisso | Categoria |
+|---|---|
+| `SCH` | schede |
+| `SEN` | sensori |
+| `ATT` | attuatori |
+| `CAV` | cavi |
+| `ALI` | alimentazione |
+| `MIS` | strumenti di misura |
+
+Il file viene letto e controllato all'avvio: campi mancanti o in più, testi vuoti, codice fuori
+formato o con prefisso diverso dalla categoria, categoria sconosciuta, quantità non intera o
+negativa e codici duplicati fermano l'assistente con «Catalogo non valido: ...» (codice di uscita 4).
+
+- `cerca_articoli(testo, categoria)`: tutte le parole del testo devono comparire in nome,
+  descrizione o categoria; maiuscole e accenti non contano, singolari e plurali sì. Al massimo
+  10 risultati. Se non trova nulla lo dice esplicitamente.
+- `dettaglio_articolo(codice)`: scheda completa; spazi, trattini e maiuscole nel codice non contano.
+
+Esempi di domande: «Avete sensori di temperatura?», «Dimmi tutto su SEN-004», «Dov'è il sensore di
+umidità?», «Avete stampanti 3D?» (nessun risultato), «Dammi il dettaglio dell'articolo XYZ-999»
+(codice inesistente).
 
 ## Checklist manuale
 
@@ -178,6 +211,10 @@ modello non chiama lo strumento: per provare l'errore serve una richiesta esplic
 7. Servizio `scadenze_api` spento durante la sessione: una domanda su giorni o scadenze riceve un
    errore spiegato e l'assistente resta aperto.
 8. Dopo l'uscita dall'assistente non resta acceso nessun processo `convertitore_mcp`.
+9. Catalogo: le cinque domande di esempio della sezione «Catalogo del laboratorio». Nei log
+   compaiono `cerca_articoli` e/o `dettaglio_articolo`; le risposte citano solo articoli, quantità
+   e posizioni presenti nel file. Verificata con la prova reale e, in Docker, con
+   `"Avete sensori di temperatura?", "/esci" | docker compose run --rm -T assistente`.
 
 ## Struttura del grafo
 
@@ -200,6 +237,9 @@ Il limite è `MAX_PASSAGGI_STRUMENTI`. Il codice è in `assistente/grafo.py`.
 `convertitore_mcp` non è partito o non ha risposto entro 30 secondi. Controllare che le dipendenze
 siano installate (`mcp` è in `requirements.txt`) e che l'assistente venga lanciato dalla cartella
 `lezione_4/`.
+
+**«Catalogo non valido: ...»** (l'assistente esce con codice 4): il messaggio indica l'articolo
+(posizione nella lista e codice) e il motivo; correggere `assistente/dati/catalogo.json`.
 
 **«Errore: servizio scadenze non raggiungibile su ...»:** in locale il servizio va avviato in
 un'altra finestra con `.\.venv\Scripts\python -m scadenze_api` e `SCADENZE_API_URL` deve puntare

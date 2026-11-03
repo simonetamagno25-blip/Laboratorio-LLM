@@ -9,6 +9,7 @@ from assistente.grafo import (
     costruisci_grafo,
     instrada_dopo_modello,
     limite_ricorsione,
+    prompt_di_sistema,
 )
 from assistente.strumenti import crea_strumenti
 from tests.fakes import ModelloFinto, chiamata_strumento
@@ -169,3 +170,45 @@ def test_limite_con_chiamata_non_valida_non_lascia_chiamate_senza_risposta():
     messaggi = risultato["messages"]
     assert messaggi[-1].content == MESSAGGIO_LIMITE
     assert not any(isinstance(m, AIMessage) and m.invalid_tool_calls for m in messaggi)
+
+
+@pytest.fixture(scope="module")
+def tutti_gli_strumenti(servizio_scadenze):
+    from assistente.client_api import crea_strumenti_api
+    from assistente.client_mcp import ClientMCP, comando_convertitore
+
+    with ClientMCP(*comando_convertitore()) as client:
+        yield crea_strumenti(AUTUNNO) + client.strumenti() + crea_strumenti_api(servizio_scadenze)
+
+
+@pytest.mark.parametrize(
+    "nome, args, controllo",
+    [
+        ("calcola", {"espressione": "2 + 2"}, lambda t: t == "2 + 2 = 4"),
+        ("converti_unita", {"valore": 26, "da": "mi", "a": "km"}, lambda t: t == "26 mi = 41.8429 km"),
+        (
+            "giorni_tra_date",
+            {"inizio": "2026-12-20", "fine": "2027-01-10", "solo_lavorativi": True},
+            lambda t: t.startswith("12 giorni lavorativi") and t.endswith("normativo.)"),
+        ),
+        (
+            "calcola_scadenza",
+            {"inizio": "2026-12-23", "giorni": 3, "solo_lavorativi": True},
+            lambda t: "2026-12-29" in t,
+        ),
+    ],
+)
+def test_nuovi_strumenti_passano_dal_nodo_strumenti(tutti_gli_strumenti, nome, args, controllo):
+    modello = ModelloFinto([chiamata_strumento(None, nome=nome, args=args), AIMessage("Fatto.")])
+    grafo = costruisci_grafo(modello, tutti_gli_strumenti, "Europe/Rome", 3)
+    stato = invoca(grafo, "domanda")
+    [risultato] = [m for m in stato["messages"] if isinstance(m, ToolMessage)]
+    assert risultato.name == nome
+    assert controllo(risultato.content), risultato.content
+
+
+def test_prompt_di_sistema_cita_i_nuovi_strumenti():
+    testo = prompt_di_sistema("Europe/Rome")
+    for nome in ("ora_corrente", "calcola", "converti_unita", "giorni_tra_date", "calcola_scadenza"):
+        assert nome in testo
+    assert "non calcolare a mente" in testo

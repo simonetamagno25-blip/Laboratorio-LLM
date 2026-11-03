@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from langchain_core.tools import BaseTool, StructuredTool
 
+from assistente.calcolatrice import calcola
+
 Orologio = Callable[[], datetime]
 
 
@@ -34,4 +36,13 @@ def crea_strumenti(adesso: Orologio = adesso_utc) -> list[BaseTool]:
             "Passa un nome IANA del fuso, per esempio Europe/Rome."
         ),
     )
-    return [strumento]
+    calcolatrice = StructuredTool.from_function(
+        func=calcola,
+        name="calcola",
+        description=(
+            "Calcola un'espressione aritmetica e restituisce il risultato esatto. "
+            "Ammessi solo numeri, + - * / % ** e parentesi, per esempio (12 + 8) * 3 / 4. "
+            "Usalo sempre per i calcoli invece di farli a mente."
+        ),
+    )
+    return [strumento, calcolatrice]

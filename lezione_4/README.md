@@ -1,9 +1,19 @@
 # Assistente del laboratorio
 
 Applicazione da terminale in Python che conversa con un modello locale servito da LM Studio.
-Il flusso è un grafo LangGraph esplicito. Il modello può chiedere lo strumento `ora_corrente`
-(fuso orario esplicito) con il tool calling e il programma lo esegue davvero.
-La cronologia dura quanto la sessione.
+Il flusso è un grafo LangGraph esplicito. Il modello chiede gli strumenti con il tool calling e il
+programma li esegue davvero. La cronologia dura quanto la sessione.
+
+Gli strumenti sono collegati con tre meccanismi diversi, per confrontarli:
+
+| Strumento | Meccanismo | Dove gira il codice |
+|---|---|---|
+| `ora_corrente` (fuso orario esplicito) | tool locale | `assistente/strumenti.py` |
+| `calcola` (calcolatrice sicura, senza `eval`) | tool locale | `assistente/calcolatrice.py` |
+| `converti_unita` (unità come elenco chiuso) | server MCP via stdio | `convertitore_mcp/`, avviato dall'assistente come sottoprocesso |
+| `giorni_tra_date`, `calcola_scadenza` | API HTTP | servizio `scadenze_api/`, chiamato con `httpx` da `assistente/client_api.py` |
+
+Per il modello sono tutti normali strumenti: cambia solo dove viene eseguito il codice.
 
 I comandi sono PowerShell (Windows) e vanno lanciati dalla cartella `lezione_4/`.
 
@@ -28,6 +38,9 @@ Il file `.env` non va in Git. Le variabili sono:
 | `FUSO_ORARIO_PREDEFINITO` | no | `Europe/Rome` |
 | `MAX_PASSAGGI_STRUMENTI` | no | `3` |
 | `LOG_LEVEL` | no | `INFO` (valori: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
+| `SCADENZE_API_URL` | sì | in locale `http://localhost:8000`; in Docker `http://scadenze:8000` (da `docker-compose.yml`) |
+| `SCADENZE_API_PORTA` | no | `8000` (porta del servizio `scadenze_api`) |
+| `SCADENZE_API_HOST` | no | `127.0.0.1` (solo questo computer); in Docker `0.0.0.0` (da `docker-compose.yml`) |
 
 L'identificativo del modello è quello restituito dal server:
 
@@ -53,19 +66,36 @@ Get-Content .env | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Objec
 
 ## Avvio
 
-In locale, dopo aver caricato `.env`:
+In locale servono due finestre di PowerShell. Nella prima si avvia il servizio di giorni e scadenze
+(resta in ascolto finché non si preme Ctrl+C):
+
+```powershell
+.\.venv\Scripts\python -m scadenze_api
+```
+
+Nella seconda, dopo aver caricato `.env`:
 
 ```powershell
 .\.venv\Scripts\python -m assistente
 ```
 
-Con Docker Compose (legge `.env` con `env_file` e imposta da solo l'indirizzo
-`host.docker.internal`). Costruzione dell'immagine e sessione con input da pipe, entrambe verificate:
+L'assistente avvia da solo il server MCP del convertitore e lo chiude all'uscita. Il server si può
+anche avviare a mano (`.\.venv\Scripts\python -m convertitore_mcp`), ma parla il protocollo MCP su
+stdin/stdout ed è pensato per essere lanciato da un client MCP. Se il servizio delle scadenze non è
+attivo l'assistente parte lo stesso e i relativi strumenti rispondono con un errore.
+
+Con Docker Compose (legge `.env` con `env_file` e imposta da solo gli indirizzi di LM Studio,
+`host.docker.internal`, e del servizio `scadenze`). Il servizio `scadenze` parte da solo come
+dipendenza dell'assistente; il server MCP gira dentro il container dell'assistente.
+Costruzione delle immagini e sessione con input da pipe, verificate:
 
 ```powershell
 docker compose build
-"Che ore sono?", "/esci" | docker compose run --rm -T assistente
+"Quanto fa 2 + 2?", "Quanti centimetri sono 3 pollici?", "/esci" | docker compose run --rm -T assistente
+docker compose down
 ```
+
+`docker compose down` ferma anche il servizio `scadenze`, che altrimenti resta attivo.
 
 Sessione interattiva con terminale (TTY), verificata a mano con una tastiera reale:
 
@@ -104,8 +134,29 @@ Prova reale con LM Studio, attivata esplicitamente (richiede il server e `.env` 
 .\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -v -s
 ```
 
+La prova reale fa una domanda per ogni nuovo strumento (calcolo, conversione, giorni lavorativi)
+e una conversione impossibile; avvia da sola il servizio delle scadenze su una porta libera e il server MCP.
+Verificata con `google/gemma-4-e2b`: 5 test superati.
+
 Una risposta simulata nei test automatici non dimostra che il modello locale sappia usare lo strumento:
 solo la prova reale e le sessioni reali lo fanno.
+
+I test che avviano il server MCP vero (`tests/test_server_mcp.py`, `tests/test_client_mcp.py`) usano
+anche un piccolo server di prova, `tests/server_mcp_prova.py`, per simulare un server che cade o
+che non risponde in tempo.
+
+## Regole degli strumenti
+
+- **Calcolatrice:** numeri, `+ - * / % **`, parentesi e segno. Tutto il resto (nomi, funzioni,
+  testo, confronti) è rifiutato con il motivo. Limiti: 200 caratteri, esponente fino a 100,
+  risultati fino a 1e100.
+- **Convertitore:** lunghezza (`mm cm m km in ft mi`), massa (`g kg t oz lb`), temperatura
+  (`C F K`), volume (`ml l`), tempo (`s min h d`). Grandezze diverse o temperature sotto lo zero
+  assoluto danno errore.
+- **Giorni e scadenze:** date solo `AAAA-MM-GG`. Il giorno di inizio è escluso, quello di fine
+  incluso. I giorni lavorativi escludono sabato, domenica e le festività nazionali del file
+  `scadenze_api/dati/festivita_it.json` (anni 2026 e 2027; fonte: legge 260/1949 e successive
+  modifiche, legge 151/2025 per il 4 ottobre). Il risultato è indicativo e non ha valore normativo.
 
 ## Checklist manuale
 
@@ -122,6 +173,11 @@ modello non chiama lo strumento: per provare l'errore serve una richiesta esplic
 4. Fuso inesistente (per esempio "Che ore sono su Marte/Base?"): lo strumento restituisce
    `Fuso orario non valido` e il modello lo spiega, senza chiudere la sessione.
 5. LM Studio spento: la sessione mostra «LM Studio non raggiungibile su ...» e resta aperta.
+6. Ctrl+C durante una risposta e subito dopo l'avvio, in locale e in Docker con TTY
+   (`docker compose run --rm assistente`): l'assistente si chiude in modo ordinato, senza traceback.
+7. Servizio `scadenze_api` spento durante la sessione: una domanda su giorni o scadenze riceve un
+   errore spiegato e l'assistente resta aperto.
+8. Dopo l'uscita dall'assistente non resta acceso nessun processo `convertitore_mcp`.
 
 ## Struttura del grafo
 
@@ -139,6 +195,18 @@ Lo stato ha `messages` (la cronologia) e `passaggi_strumenti` (il contatore, azz
 Il limite è `MAX_PASSAGGI_STRUMENTI`. Il codice è in `assistente/grafo.py`.
 
 ## Diagnosi
+
+**«Server MCP del convertitore non avviato»** (l'assistente esce con codice 3): il server
+`convertitore_mcp` non è partito o non ha risposto entro 30 secondi. Controllare che le dipendenze
+siano installate (`mcp` è in `requirements.txt`) e che l'assistente venga lanciato dalla cartella
+`lezione_4/`.
+
+**«Errore: servizio scadenze non raggiungibile su ...»:** in locale il servizio va avviato in
+un'altra finestra con `.\.venv\Scripts\python -m scadenze_api` e `SCADENZE_API_URL` deve puntare
+alla stessa porta. In Docker l'indirizzo è `http://scadenze:8000`.
+
+**«festività non disponibili per il 2028»:** il file delle festività copre solo il 2026 e il 2027;
+per gli altri anni il conteggio dei giorni lavorativi è rifiutato, quello di calendario funziona.
 
 **LM Studio non raggiungibile in locale** ("LM Studio non raggiungibile su ..."):
 - il server di LM Studio deve essere avviato;

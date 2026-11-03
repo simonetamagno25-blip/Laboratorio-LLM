@@ -8,6 +8,8 @@ COPY requirements.txt requirements-dev.txt ./
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
 COPY assistente/ assistente/
+COPY convertitore_mcp/ convertitore_mcp/
+COPY scadenze_api/ scadenze_api/
 COPY tests/ tests/
 COPY pyproject.toml ./
 

@@ -2,7 +2,11 @@ import pytest
 
 from assistente.config import ErroreConfigurazione, carica_configurazione
 
-BASE = {"LMSTUDIO_BASE_URL": "http://localhost:1234/v1", "LMSTUDIO_MODEL": "google/gemma-4-e2b"}
+BASE = {
+    "LMSTUDIO_BASE_URL": "http://localhost:1234/v1",
+    "LMSTUDIO_MODEL": "google/gemma-4-e2b",
+    "SCADENZE_API_URL": "http://localhost:8000",
+}
 
 
 def test_valori_predefiniti():
@@ -14,7 +18,7 @@ def test_valori_predefiniti():
     assert c.log_level == "INFO"
 
 
-@pytest.mark.parametrize("mancante", ["LMSTUDIO_BASE_URL", "LMSTUDIO_MODEL"])
+@pytest.mark.parametrize("mancante", ["LMSTUDIO_BASE_URL", "LMSTUDIO_MODEL", "SCADENZE_API_URL"])
 def test_variabile_obbligatoria_mancante(mancante):
     env = {k: v for k, v in BASE.items() if k != mancante}
     with pytest.raises(ErroreConfigurazione, match=mancante):
@@ -52,3 +56,14 @@ def test_log_level_non_valido():
     env = {**BASE, "LOG_LEVEL": "verbose"}
     with pytest.raises(ErroreConfigurazione, match="LOG_LEVEL"):
         carica_configurazione(env)
+
+
+def test_indirizzo_api_scadenze_senza_barra_finale():
+    c = carica_configurazione({**BASE, "SCADENZE_API_URL": " http://scadenze:8000/ "})
+    assert c.scadenze_api_url == "http://scadenze:8000"
+
+
+@pytest.mark.parametrize("valore", ["ftp://x", "localhost:8000", "http://"])
+def test_indirizzo_api_scadenze_non_valido(valore):
+    with pytest.raises(ErroreConfigurazione, match="SCADENZE_API_URL"):
+        carica_configurazione({**BASE, "SCADENZE_API_URL": valore})

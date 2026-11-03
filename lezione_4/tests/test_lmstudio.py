@@ -86,3 +86,70 @@ def test_il_modello_reale_usa_i_nuovi_strumenti(grafo_completo, domanda, strumen
     risultati = [m for m in messaggi if isinstance(m, ToolMessage) and m.name == strumento]
     assert any(atteso in m.content for m in risultati), messaggi
     print(f"\n{domanda}\n-> {messaggi[-1].content}")
+
+
+def chiedi(grafo_completo, domanda):
+    """Pone la domanda al modello reale; stampa chiamate e risposta per il giudizio a occhio."""
+    grafo, limite = grafo_completo
+    stato = grafo.invoke(
+        {"messages": [HumanMessage(domanda)], "passaggi_strumenti": 0},
+        {"recursion_limit": limite},
+    )
+    messaggi = stato["messages"]
+    chiamate = [c for m in messaggi if isinstance(m, AIMessage) for c in m.tool_calls]
+    risultati = [m for m in messaggi if isinstance(m, ToolMessage)]
+    print(f"\n{domanda}")
+    for c in chiamate:
+        print(f"   chiamata: {c['name']} {c['args']}")
+    print(f"-> {messaggi[-1].content}")
+    return chiamate, risultati
+
+
+def codice_normalizzato(chiamata):
+    return "".join(str(chiamata["args"].get("codice", "")).split()).upper()
+
+
+@pytest.mark.lmstudio
+def test_catalogo_ricerca(grafo_completo):
+    chiamate, risultati = chiedi(grafo_completo, "Avete sensori di temperatura?")
+    assert any(c["name"] == "cerca_articoli" for c in chiamate), chiamate
+    assert any(
+        m.name == "cerca_articoli" and "Articoli trovati:" in m.content for m in risultati
+    ), risultati
+
+
+@pytest.mark.lmstudio
+def test_catalogo_dettaglio(grafo_completo):
+    chiamate, _ = chiedi(grafo_completo, "Dimmi tutto su SEN-004")
+    assert any(
+        c["name"] == "dettaglio_articolo" and codice_normalizzato(c) == "SEN-004" for c in chiamate
+    ), chiamate
+
+
+@pytest.mark.lmstudio
+def test_catalogo_ricerca_poi_dettaglio(grafo_completo):
+    chiamate, risultati = chiedi(grafo_completo, "Dov'è il sensore di umidità?")
+    nomi = [c["name"] for c in chiamate]
+    assert "cerca_articoli" in nomi and "dettaglio_articolo" in nomi, chiamate
+    assert nomi.index("cerca_articoli") < nomi.index("dettaglio_articolo"), chiamate
+    testo_ricerche = "\n".join(m.content for m in risultati if m.name == "cerca_articoli")
+    dettagli = [c for c in chiamate if c["name"] == "dettaglio_articolo"]
+    assert any(codice_normalizzato(c) in testo_ricerche for c in dettagli), chiamate
+
+
+@pytest.mark.lmstudio
+def test_catalogo_nessun_risultato(grafo_completo):
+    chiamate, risultati = chiedi(grafo_completo, "Avete stampanti 3D?")
+    assert any(c["name"] == "cerca_articoli" for c in chiamate), chiamate
+    assert any(
+        m.name == "cerca_articoli" and "Nessun articolo trovato" in m.content for m in risultati
+    ), risultati
+
+
+@pytest.mark.lmstudio
+def test_catalogo_codice_inesistente(grafo_completo):
+    chiamate, risultati = chiedi(grafo_completo, "Dammi il dettaglio dell'articolo XYZ-999")
+    assert any(c["name"] == "dettaglio_articolo" for c in chiamate), chiamate
+    assert any(
+        m.name == "dettaglio_articolo" and "Codice non trovato" in m.content for m in risultati
+    ), risultati

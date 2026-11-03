@@ -6,7 +6,10 @@ from assistente.catalogo import (
     CATEGORIE,
     Articolo,
     ErroreCatalogo,
+    MAX_RISULTATI,
     carica_catalogo,
+    cerca_articoli,
+    dettaglio_articolo,
     valida_catalogo,
 )
 
@@ -105,3 +108,133 @@ def test_file_con_bom(tmp_path):
     percorso = tmp_path / "bom.json"
     percorso.write_text(json.dumps([articolo()]), encoding="utf-8-sig")
     assert carica_catalogo(percorso)[0].codice == "SEN-001"
+
+
+# --- ricerca e dettaglio ---
+
+
+def voce(codice, nome, categoria, descrizione="Descrizione.", quantita=1, posizione="Banco 1"):
+    return Articolo(codice, nome, categoria, descrizione, quantita, posizione)
+
+
+@pytest.fixture
+def piccolo():
+    return (
+        voce("CAV-001", "Cavo USB-C", "cavi", "Cavo da 1 m per dati."),
+        voce("SCH-001", "Scheda Arduino Uno", "schede", "Microcontrollore."),
+        voce(
+            "SEN-004",
+            "Sensore di temperatura e umidità DHT22",
+            "sensori",
+            "Misura anche l'umidità relativa.",
+            6,
+            "Armadio B, ripiano 2",
+        ),
+        voce("SEN-001", "Sensore di temperatura DS18B20", "sensori", "Sonda impermeabile.", 0),
+    )
+
+
+@pytest.fixture
+def grande():
+    return tuple(voce(f"SEN-{n:03d}", f"Sensore {n}", "sensori") for n in range(1, 13))
+
+
+def test_cerca_per_parola(piccolo):
+    righe = cerca_articoli(piccolo, "temperatura").splitlines()
+    assert righe[0] == "Articoli trovati: 2"
+    assert righe[1].startswith("SEN-001") and righe[2].startswith("SEN-004")
+
+
+def test_cerca_tutte_le_parole_anche_in_campi_diversi(piccolo):
+    assert "SEN-001" in cerca_articoli(piccolo, "DS18B20 impermeabile")
+    assert cerca_articoli(piccolo, "DS18B20 cavo").startswith("Nessun articolo trovato")
+
+
+def test_cerca_senza_maiuscole_e_accenti(piccolo):
+    assert "SEN-004" in cerca_articoli(piccolo, "UMIDITA")
+
+
+def test_cerca_con_punteggiatura(piccolo):
+    assert cerca_articoli(piccolo, "DHT22?") == cerca_articoli(piccolo, "dht22")
+    assert cerca_articoli(piccolo, "Temperatura,") == cerca_articoli(piccolo, "temperatura")
+
+
+def test_cerca_per_categoria(piccolo):
+    righe = cerca_articoli(piccolo, categoria=" Sensori ").splitlines()
+    assert righe[0] == "Articoli trovati: 2"
+    assert all(riga.startswith("SEN-") for riga in righe[1:])
+
+
+def test_cerca_testo_e_categoria(piccolo):
+    assert cerca_articoli(piccolo, "temperatura", "cavi") == (
+        'Nessun articolo trovato per "temperatura" nella categoria "cavi". '
+        "Il catalogo non contiene articoli corrispondenti."
+    )
+
+
+def test_esaurito_segnalato(piccolo):
+    riga = next(r for r in cerca_articoli(piccolo, "DS18B20").splitlines() if "SEN-001" in r)
+    assert riga == "SEN-001 | Sensore di temperatura DS18B20 | quantità: 0 (esaurito)"
+
+
+def test_riga_di_risultato(piccolo):
+    assert "SEN-004 | Sensore di temperatura e umidità DHT22 | quantità: 6" in (
+        cerca_articoli(piccolo, "DHT22").splitlines()
+    )
+
+
+def test_nessun_risultato(piccolo):
+    assert cerca_articoli(piccolo, "stampante 3D") == (
+        'Nessun articolo trovato per "stampante 3D". '
+        "Il catalogo non contiene articoli corrispondenti."
+    )
+
+
+def test_categoria_non_valida(piccolo):
+    assert cerca_articoli(piccolo, categoria="robot") == (
+        'Errore: categoria non valida: "robot". Categorie valide: schede, sensori, '
+        "attuatori, cavi, alimentazione, strumenti di misura."
+    )
+
+
+@pytest.mark.parametrize("testo", ["", "   ", "?!"])
+def test_testo_e_categoria_vuoti(piccolo, testo):
+    assert cerca_articoli(piccolo, testo, "") == (
+        "Errore: indica un testo da cercare o una categoria."
+    )
+
+
+def test_troncamento(grande):
+    righe = cerca_articoli(grande, categoria="sensori").splitlines()
+    assert MAX_RISULTATI == 10
+    assert righe[0] == "Articoli trovati: 12"
+    assert len([r for r in righe if r.startswith("SEN-")]) == 10
+    assert righe[-1] == "Altri 2 articoli non mostrati: restringi la ricerca."
+
+
+def test_dettaglio(piccolo):
+    assert dettaglio_articolo(piccolo, "SEN-004") == "\n".join(
+        [
+            "codice: SEN-004",
+            "nome: Sensore di temperatura e umidità DHT22",
+            "categoria: sensori",
+            "descrizione: Misura anche l'umidità relativa.",
+            "quantità: 6",
+            "posizione: Armadio B, ripiano 2",
+        ]
+    )
+
+
+def test_dettaglio_esaurito(piccolo):
+    assert "quantità: 0 (esaurito)" in dettaglio_articolo(piccolo, "SEN-001").splitlines()
+
+
+@pytest.mark.parametrize("codice", ["sen-004", " SEN-004 ", "sen 004"])
+def test_dettaglio_codice_normalizzato(piccolo, codice):
+    assert dettaglio_articolo(piccolo, codice) == dettaglio_articolo(piccolo, "SEN-004")
+
+
+def test_dettaglio_inesistente(piccolo):
+    assert dettaglio_articolo(piccolo, "XYZ-999") == (
+        'Codice non trovato: "XYZ-999". Usa cerca_articoli per trovare il codice giusto.'
+    )

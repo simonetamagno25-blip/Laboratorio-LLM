@@ -227,6 +227,17 @@ def test_ricerca_poi_dettaglio():
 def test_prompt_di_sistema_cita_il_catalogo():
     testo = prompt_di_sistema("Europe/Rome")
     assert "cerca_articoli" in testo and "dettaglio_articolo" in testo
+    # Il modello reale non cercava per "Avete stampanti 3D?" e "Dov'è il sensore di umidità?".
+    assert "usa sempre cerca_articoli prima di rispondere" in testo
+    assert "dove si trova" in testo
+    assert "anche se pensi che non ci sia" in testo
+
+
+def test_prompt_di_sistema_impone_il_convertitore():
+    # Con la frase del catalogo il modello rifiutava "5 kg in metri" senza chiamare lo strumento.
+    testo = prompt_di_sistema("Europe/Rome")
+    assert "usa sempre converti_unita" in testo
+    assert "anche se le unità ti sembrano incompatibili" in testo
 
 
 def test_prompt_di_sistema_cita_i_nuovi_strumenti():

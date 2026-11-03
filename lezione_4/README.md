@@ -173,6 +173,11 @@ modello non chiama lo strumento: per provare l'errore serve una richiesta esplic
 4. Fuso inesistente (per esempio "Che ore sono su Marte/Base?"): lo strumento restituisce
    `Fuso orario non valido` e il modello lo spiega, senza chiudere la sessione.
 5. LM Studio spento: la sessione mostra «LM Studio non raggiungibile su ...» e resta aperta.
+6. Ctrl+C durante una risposta e subito dopo l'avvio, in locale e in Docker con TTY
+   (`docker compose run --rm assistente`): l'assistente si chiude in modo ordinato, senza traceback.
+7. Servizio `scadenze_api` spento durante la sessione: una domanda su giorni o scadenze riceve un
+   errore spiegato e l'assistente resta aperto.
+8. Dopo l'uscita dall'assistente non resta acceso nessun processo `convertitore_mcp`.
 
 ## Struttura del grafo
 

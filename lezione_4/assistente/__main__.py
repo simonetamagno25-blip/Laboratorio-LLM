@@ -3,6 +3,7 @@
 import logging
 import sys
 
+from assistente.catalogo import ErroreCatalogo, carica_catalogo
 from assistente.cli import Sessione, esegui_ciclo
 from assistente.client_api import crea_strumenti_api
 from assistente.client_mcp import ClientMCP, ErroreMCP, comando_convertitore
@@ -27,6 +28,13 @@ def main() -> int:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpx2").setLevel(logging.WARNING)
 
+    # Prima del server MCP: con un catalogo non valido non resta nessun sottoprocesso da chiudere.
+    try:
+        catalogo = carica_catalogo()
+    except ErroreCatalogo as errore:
+        print(f"Catalogo non valido: {errore}", file=sys.stderr)
+        return 4
+
     client_mcp = ClientMCP(*comando_convertitore())
     try:
         client_mcp.avvia()
@@ -41,7 +49,7 @@ def main() -> int:
     # Il try/finally chiude il server MCP anche con Ctrl+C o errori imprevisti.
     try:
         strumenti = (
-            crea_strumenti()
+            crea_strumenti(catalogo=catalogo)
             + client_mcp.strumenti()
             + crea_strumenti_api(config.scadenze_api_url)
         )

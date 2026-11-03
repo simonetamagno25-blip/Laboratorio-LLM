@@ -207,6 +207,28 @@ def test_nuovi_strumenti_passano_dal_nodo_strumenti(tutti_gli_strumenti, nome, a
     assert controllo(risultato.content), risultato.content
 
 
+def test_ricerca_poi_dettaglio():
+    modello, grafo = crea(
+        [
+            chiamata_strumento(None, id="c1", nome="cerca_articoli", args={"testo": "umidità"}),
+            chiamata_strumento(None, id="c2", nome="dettaglio_articolo", args={"codice": "SEN-004"}),
+            AIMessage("È nell'armadio B, ripiano 2."),
+        ]
+    )
+    stato = invoca(grafo, "Dov'è il sensore di umidità?")
+    assert len(modello.chiamate) == 3
+    [ricerca] = [m for m in modello.chiamate[1] if isinstance(m, ToolMessage)]
+    assert ricerca.tool_call_id == "c1" and "SEN-004" in ricerca.content
+    dettaglio = [m for m in modello.chiamate[2] if isinstance(m, ToolMessage)][-1]
+    assert dettaglio.tool_call_id == "c2" and "posizione:" in dettaglio.content
+    assert stato["messages"][-1].content == "È nell'armadio B, ripiano 2."
+
+
+def test_prompt_di_sistema_cita_il_catalogo():
+    testo = prompt_di_sistema("Europe/Rome")
+    assert "cerca_articoli" in testo and "dettaglio_articolo" in testo
+
+
 def test_prompt_di_sistema_cita_i_nuovi_strumenti():
     testo = prompt_di_sistema("Europe/Rome")
     for nome in ("ora_corrente", "calcola", "converti_unita", "giorni_tra_date", "calcola_scadenza"):

@@ -104,6 +104,13 @@ def test_json_non_valido(tmp_path):
         carica_catalogo(percorso)
 
 
+def test_file_non_utf8(tmp_path):
+    percorso = tmp_path / "ansi.json"
+    percorso.write_bytes(json.dumps([articolo(nome="Sensore di umidità")], ensure_ascii=False).encode("cp1252"))
+    with pytest.raises(ErroreCatalogo, match="ansi.json.*UTF-8"):
+        carica_catalogo(percorso)
+
+
 def test_file_con_bom(tmp_path):
     percorso = tmp_path / "bom.json"
     percorso.write_text(json.dumps([articolo()]), encoding="utf-8-sig")

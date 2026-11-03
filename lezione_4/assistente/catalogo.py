@@ -98,6 +98,10 @@ def carica_catalogo(percorso: Path = FILE_CATALOGO) -> Catalogo:
         testo = percorso.read_text(encoding="utf-8-sig")
     except OSError as errore:
         raise ErroreCatalogo(f"impossibile leggere {percorso}: {errore.strerror}") from errore
+    except UnicodeDecodeError as errore:
+        raise ErroreCatalogo(
+            f"{percorso} non è un testo UTF-8 valido (salvarlo in UTF-8): {errore}"
+        ) from errore
     try:
         dati = json.loads(testo)
     except json.JSONDecodeError as errore:

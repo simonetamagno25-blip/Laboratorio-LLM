@@ -245,3 +245,144 @@ def test_prompt_di_sistema_cita_i_nuovi_strumenti():
     for nome in ("ora_corrente", "calcola", "converti_unita", "giorni_tra_date", "calcola_scadenza"):
         assert nome in testo
     assert "non calcolare a mente" in testo
+
+
+# --- Note: conferma dell'eliminazione ---
+
+from langgraph.types import Command
+
+from assistente.note import apri_archivio
+
+CONFIG_NOTE = {"recursion_limit": limite_ricorsione(3), "configurable": {"thread_id": "t"}}
+
+
+@pytest.fixture
+def archivio(tmp_path):
+    archivio = apri_archivio(tmp_path / "note.sqlite3", "Europe/Rome", AUTUNNO)
+    yield archivio
+    archivio.chiudi()
+
+
+def crea_con_note(risposte, archivio):
+    modello = ModelloFinto(risposte)
+    strumenti = crea_strumenti(AUTUNNO, archivio=archivio)
+    grafo = costruisci_grafo(modello, strumenti, "Europe/Rome", 3, archivio=archivio)
+    return modello, grafo
+
+
+def elimina(numero, id="call_1"):
+    return chiamata_strumento(None, id=id, nome="elimina_nota", args={"numero": numero})
+
+
+def avvia(grafo, testo="elimina"):
+    return grafo.invoke({"messages": [HumanMessage(testo)], "passaggi_strumenti": 0}, CONFIG_NOTE)
+
+
+def esiti(stato):
+    return {m.tool_call_id: m.content for m in stato["messages"] if isinstance(m, ToolMessage)}
+
+
+def test_instradamento_elimina_va_alla_conferma():
+    stato = {"messages": [elimina(1)], "passaggi_strumenti": 0}
+    assert instrada_dopo_modello(stato, 3) == "conferma_eliminazione"
+
+
+def test_instradamento_elimina_al_limite():
+    stato = {"messages": [elimina(1)], "passaggi_strumenti": 3}
+    assert instrada_dopo_modello(stato, 3) == "limite_raggiunto"
+
+
+def test_elimina_si_ferma_con_i_dati_dell_archivio(archivio):
+    archivio.aggiungi("sensore SEN-004 da ricalibrare")
+    _, grafo = crea_con_note([elimina(1), AIMessage("fatto")], archivio)
+    esito = avvia(grafo)
+    assert esito["__interrupt__"][0].value == {
+        "numero": 1,
+        "creata": "2026-10-26 17:05",
+        "testo": "sensore SEN-004 da ricalibrare",
+    }
+    assert archivio.leggi(1) is not None
+
+
+def test_elimina_confermata(archivio):
+    archivio.aggiungi("sensore SEN-004 da ricalibrare")
+    _, grafo = crea_con_note([elimina(1), AIMessage("fatto")], archivio)
+    avvia(grafo)
+    stato = grafo.invoke(Command(resume=True), CONFIG_NOTE)
+    assert archivio.leggi(1) is None
+    assert esiti(stato) == {"call_1": "Nota 1 eliminata."}
+    assert stato["messages"][-1].content == "fatto"
+
+
+def test_elimina_rifiutata(archivio):
+    archivio.aggiungi("sensore SEN-004 da ricalibrare")
+    _, grafo = crea_con_note([elimina(1), AIMessage("lasciata")], archivio)
+    avvia(grafo)
+    stato = grafo.invoke(Command(resume=False), CONFIG_NOTE)
+    assert archivio.leggi(1) is not None
+    assert esiti(stato) == {
+        "call_1": "Eliminazione annullata dall'utente: la nota 1 non è stata eliminata."
+    }
+
+
+def test_elimina_con_numero_stringa(archivio):
+    archivio.aggiungi("sensore")
+    _, grafo = crea_con_note([elimina("1"), AIMessage("fatto")], archivio)
+    assert "__interrupt__" in avvia(grafo)
+    grafo.invoke(Command(resume=True), CONFIG_NOTE)
+    assert archivio.leggi(1) is None
+
+
+@pytest.mark.parametrize("numero", [7, 0, -1, True, "tre"])
+def test_elimina_numero_non_valido_senza_pausa(archivio, numero):
+    archivio.aggiungi("sensore")
+    _, grafo = crea_con_note([elimina(numero), AIMessage("niente")], archivio)
+    stato = avvia(grafo)
+    assert "__interrupt__" not in stato
+    assert archivio.leggi(1) is not None
+    esito = esiti(stato)["call_1"]
+    assert "non trovata" in esito or esito.startswith("Errore"), esito
+
+
+def test_due_eliminazioni_una_conferma(archivio):
+    archivio.aggiungi("prima")
+    archivio.aggiungi("seconda")
+    doppia = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "elimina_nota", "args": {"numero": 1}, "id": "a", "type": "tool_call"},
+            {"name": "elimina_nota", "args": {"numero": 2}, "id": "b", "type": "tool_call"},
+        ],
+    )
+    _, grafo = crea_con_note([doppia, AIMessage("fatto")], archivio)
+    esito = avvia(grafo)
+    assert [i.value["numero"] for i in esito["__interrupt__"]] == [1]
+    stato = grafo.invoke(Command(resume=True), CONFIG_NOTE)
+    assert archivio.leggi(1) is None
+    assert archivio.leggi(2) is not None
+    assert esiti(stato) == {"a": "Nota 1 eliminata.", "b": "Errore: elimina una nota alla volta."}
+
+
+def test_aggiunta_senza_pausa(archivio):
+    aggiunta = chiamata_strumento(None, nome="aggiungi_nota", args={"testo": "cavi"})
+    _, grafo = crea_con_note([aggiunta, AIMessage("salvata")], archivio)
+    stato = avvia(grafo, "annota cavi")
+    assert "__interrupt__" not in stato
+    assert archivio.leggi(1).testo == "cavi"
+
+
+def test_elimina_senza_archivio_rifiutato():
+    archivio = apri_archivio(":memory:")
+    try:
+        with pytest.raises(ValueError):
+            costruisci_grafo(
+                ModelloFinto([]), crea_strumenti(AUTUNNO, archivio=archivio), "Europe/Rome", 3
+            )
+    finally:
+        archivio.chiudi()
+
+
+def test_prompt_di_sistema_cita_le_note():
+    testo = prompt_di_sistema("Europe/Rome")
+    for nome in ("aggiungi_nota", "cerca_note", "elenca_note", "elimina_nota"):
+        assert nome in testo

@@ -1,7 +1,7 @@
 """Grafo LangGraph: stato, nodi e instradamento della conversazione."""
 
 import logging
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal, NotRequired, TypedDict
 
 from langchain_core.messages import (
     AIMessage,
@@ -12,11 +12,17 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import interrupt
+
+from assistente.note import ArchivioNote
 
 log = logging.getLogger(__name__)
+
+ELIMINA = "elimina_nota"
 
 MESSAGGIO_LIMITE = (
     "Ho raggiunto il limite di passaggi con gli strumenti "
@@ -27,6 +33,8 @@ MESSAGGIO_LIMITE = (
 class StatoConversazione(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     passaggi_strumenti: int
+    # Id delle chiamate elimina_nota confermate dall'utente in questo passaggio.
+    eliminazioni_confermate: NotRequired[list[str]]
 
 
 def prompt_di_sistema(fuso_predefinito: str) -> str:
@@ -47,6 +55,12 @@ def prompt_di_sistema(fuso_predefinito: str) -> str:
         "anche se pensi che non ci sia; per la scheda completa di un codice usa "
         "dettaglio_articolo. Non citare articoli, quantità o posizioni che gli strumenti "
         "non hanno restituito. "
+        "L'utente può salvare note personali: quando chiede di annotare o ricordare qualcosa "
+        "usa aggiungi_nota; per ritrovarle usa cerca_note con una parola chiave, o elenca_note "
+        "per vederle tutte; per cancellarne una usa elimina_nota con il numero della nota, che "
+        "trovi con cerca_note: la conferma all'utente la chiede il programma. Se più note "
+        "corrispondono, elencale e chiedi quale eliminare. Non citare note che gli strumenti "
+        "non hanno restituito. "
         "Se uno strumento risponde con un errore, spiega all'utente il motivo "
         "senza inventare un risultato. "
         "Rispondi sempre in italiano."
@@ -55,17 +69,30 @@ def prompt_di_sistema(fuso_predefinito: str) -> str:
 
 def instrada_dopo_modello(
     stato: StatoConversazione, max_passaggi: int
-) -> Literal["strumenti", "limite_raggiunto", "__end__"]:
+) -> Literal["strumenti", "conferma_eliminazione", "limite_raggiunto", "__end__"]:
     ultimo = stato["messages"][-1]
     if not (ultimo.tool_calls or ultimo.invalid_tool_calls):
         return "__end__"
     if stato["passaggi_strumenti"] >= max_passaggi:
         return "limite_raggiunto"
+    if any(c["name"] == ELIMINA for c in ultimo.tool_calls):
+        return "conferma_eliminazione"
     return "strumenti"
 
 
 def limite_ricorsione(max_passaggi: int) -> int:
-    return 2 * max_passaggi + 4
+    # Ogni giro con gli strumenti conta fino a tre passi: modello, conferma, strumenti.
+    return 3 * max_passaggi + 4
+
+
+def numero_nota(args: dict) -> int | None:
+    """Numero di nota valido dagli argomenti della chiamata, oppure None."""
+    valore = args.get("numero")
+    if isinstance(valore, str) and valore.strip().isdecimal():
+        valore = int(valore.strip())
+    if isinstance(valore, bool) or not isinstance(valore, int) or valore <= 0:
+        return None
+    return valore
 
 
 def costruisci_grafo(
@@ -73,8 +100,41 @@ def costruisci_grafo(
     strumenti: list[BaseTool],
     fuso_predefinito: str,
     max_passaggi: int,
+    archivio: ArchivioNote | None = None,
 ) -> CompiledStateGraph:
     per_nome = {s.name: s for s in strumenti}
+    if ELIMINA in per_nome and archivio is None:
+        raise ValueError("elimina_nota richiede l'archivio delle note per la conferma")
+
+    def prima_eliminazione(messaggio: AIMessage) -> dict | None:
+        return next((c for c in messaggio.tool_calls if c["name"] == ELIMINA), None)
+
+    def nodo_conferma_eliminazione(stato: StatoConversazione) -> dict:
+        chiamata = prima_eliminazione(stato["messages"][-1])
+        numero = numero_nota(chiamata["args"]) if chiamata and archivio else None
+        nota = archivio.leggi(numero) if numero is not None else None
+        if nota is None:
+            return {"eliminazioni_confermate": []}
+        # Il grafo si ferma qui; il terminale mostra la nota salvata e riprende con sì/no.
+        si = interrupt(
+            {"numero": nota.numero, "creata": f"{nota.creata:%Y-%m-%d %H:%M}", "testo": nota.testo}
+        )
+        decisione = "confermata" if si is True else "annullata"
+        log.info("eliminazione della nota %d %s", nota.numero, decisione)
+        return {"eliminazioni_confermate": [chiamata["id"]] if si is True else []}
+
+    def esito_eliminazione(stato: StatoConversazione, chiamata: dict) -> str | None:
+        """Risposta per una elimina_nota non confermata; None se va eseguita."""
+        if chiamata["id"] in stato.get("eliminazioni_confermate", []):
+            return None
+        if chiamata["id"] != prima_eliminazione(stato["messages"][-1])["id"]:
+            return "Errore: elimina una nota alla volta."
+        numero = numero_nota(chiamata["args"])
+        if numero is None:
+            return f"Errore: numero di nota non valido: {chiamata['args'].get('numero')!r}"
+        if archivio.leggi(numero) is not None:
+            return f"Eliminazione annullata dall'utente: la nota {numero} non è stata eliminata."
+        return None  # nota inesistente: lo strumento risponde «non trovata» senza eliminare
 
     def nodo_modello(stato: StatoConversazione) -> dict:
         messaggi = [SystemMessage(prompt_di_sistema(fuso_predefinito))] + stato["messages"]
@@ -101,8 +161,13 @@ def costruisci_grafo(
             nome, args = chiamata["name"], chiamata["args"]
             log.info("chiamata strumento %s con argomenti %s", nome, args)
             strumento = per_nome.get(nome)
+            bloccata = None
+            if nome == ELIMINA and strumento is not None:
+                bloccata = esito_eliminazione(stato, chiamata)
             if strumento is None:
                 esito = f"Errore: strumento sconosciuto '{nome}'"
+            elif bloccata is not None:
+                esito = bloccata
             else:
                 try:
                     esito = str(strumento.invoke(args))
@@ -129,13 +194,21 @@ def costruisci_grafo(
     grafo = StateGraph(StatoConversazione)
     grafo.add_node("modello", nodo_modello)
     grafo.add_node("strumenti", nodo_strumenti)
+    grafo.add_node("conferma_eliminazione", nodo_conferma_eliminazione)
     grafo.add_node("limite_raggiunto", nodo_limite_raggiunto)
     grafo.add_edge(START, "modello")
     grafo.add_conditional_edges(
         "modello",
         instrada,
-        {"strumenti": "strumenti", "limite_raggiunto": "limite_raggiunto", "__end__": END},
+        {
+            "strumenti": "strumenti",
+            "conferma_eliminazione": "conferma_eliminazione",
+            "limite_raggiunto": "limite_raggiunto",
+            "__end__": END,
+        },
     )
+    grafo.add_edge("conferma_eliminazione", "strumenti")
     grafo.add_edge("strumenti", "modello")
     grafo.add_edge("limite_raggiunto", END)
-    return grafo.compile()
+    # Il checkpointer (in memoria) serve solo alla pausa per la conferma.
+    return grafo.compile(checkpointer=InMemorySaver() if archivio is not None else None)

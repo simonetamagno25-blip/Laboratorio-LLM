@@ -1,11 +1,15 @@
 """Prova reale con LM Studio: richiede il server attivo e l'opzione --lmstudio."""
 
+from uuid import uuid4
+
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langgraph.types import Command
 
 from assistente.config import carica_configurazione
 from assistente.grafo import costruisci_grafo, limite_ricorsione
 from assistente.modello import crea_modello
+from assistente.note import apri_archivio
 from assistente.strumenti import crea_strumenti
 
 
@@ -43,7 +47,14 @@ def test_il_modello_reale_usa_lo_strumento():
 
 
 @pytest.fixture(scope="module")
-def grafo_completo(servizio_scadenze):
+def archivio_prova(tmp_path_factory):
+    archivio = apri_archivio(tmp_path_factory.mktemp("note") / "note.sqlite3")
+    yield archivio
+    archivio.chiudi()
+
+
+@pytest.fixture(scope="module")
+def grafo_completo(servizio_scadenze, archivio_prova):
     import os
 
     from assistente.client_api import crea_strumenti_api
@@ -52,12 +63,17 @@ def grafo_completo(servizio_scadenze):
     os.environ.setdefault("SCADENZE_API_URL", servizio_scadenze)
     config = carica_configurazione()
     with ClientMCP(*comando_convertitore()) as client:
-        strumenti = crea_strumenti() + client.strumenti() + crea_strumenti_api(servizio_scadenze)
+        strumenti = (
+            crea_strumenti(archivio=archivio_prova)
+            + client.strumenti()
+            + crea_strumenti_api(servizio_scadenze)
+        )
         grafo = costruisci_grafo(
             crea_modello(config, strumenti),
             strumenti,
             config.fuso_predefinito,
             config.max_passaggi_strumenti,
+            archivio=archivio_prova,
         )
         yield grafo, limite_ricorsione(config.max_passaggi_strumenti)
 
@@ -80,7 +96,7 @@ def test_il_modello_reale_usa_i_nuovi_strumenti(grafo_completo, domanda, strumen
     grafo, limite = grafo_completo
     stato = grafo.invoke(
         {"messages": [HumanMessage(domanda)], "passaggi_strumenti": 0},
-        {"recursion_limit": limite},
+        config_turno(limite),
     )
     messaggi = stato["messages"]
     risultati = [m for m in messaggi if isinstance(m, ToolMessage) and m.name == strumento]
@@ -88,12 +104,16 @@ def test_il_modello_reale_usa_i_nuovi_strumenti(grafo_completo, domanda, strumen
     print(f"\n{domanda}\n-> {messaggi[-1].content}")
 
 
+def config_turno(limite):
+    return {"recursion_limit": limite, "configurable": {"thread_id": uuid4().hex}}
+
+
 def chiedi(grafo_completo, domanda):
     """Pone la domanda al modello reale; stampa chiamate e risposta per il giudizio a occhio."""
     grafo, limite = grafo_completo
     stato = grafo.invoke(
         {"messages": [HumanMessage(domanda)], "passaggi_strumenti": 0},
-        {"recursion_limit": limite},
+        config_turno(limite),
     )
     messaggi = stato["messages"]
     chiamate = [c for m in messaggi if isinstance(m, AIMessage) for c in m.tool_calls]
@@ -153,3 +173,84 @@ def test_catalogo_codice_inesistente(grafo_completo):
     assert any(
         m.name == "dettaglio_articolo" and "Codice non trovato" in m.content for m in risultati
     ), risultati
+
+
+# --- Note personali ---
+
+
+def chiedi_con_conferma(grafo_completo, domanda, risposta):
+    """Come chiedi, ma a ogni pausa per la conferma riprende con la risposta data."""
+    grafo, limite = grafo_completo
+    config = config_turno(limite)
+    pause = []
+    stato = grafo.invoke({"messages": [HumanMessage(domanda)], "passaggi_strumenti": 0}, config)
+    while stato.get("__interrupt__"):
+        pause.append(stato["__interrupt__"][0].value)
+        stato = grafo.invoke(Command(resume=risposta), config)
+    messaggi = stato["messages"]
+    chiamate = [c for m in messaggi if isinstance(m, AIMessage) for c in m.tool_calls]
+    print(f"\n{domanda}")
+    for c in chiamate:
+        print(f"   chiamata: {c['name']} {c['args']}")
+    for p in pause:
+        print(f"   conferma chiesta: {p} -> {risposta}")
+    print(f"-> {messaggi[-1].content}")
+    return chiamate, pause
+
+
+@pytest.fixture
+def note_di_prova(archivio_prova):
+    for nota in archivio_prova.tutte():
+        archivio_prova.elimina(nota.numero)
+    sensore = archivio_prova.aggiungi("il sensore SEN-004 va ricalibrato")
+    cavi = archivio_prova.aggiungi("comprare cavi USB")
+    return sensore.numero, cavi.numero
+
+
+@pytest.mark.lmstudio
+def test_note_aggiunta(grafo_completo, archivio_prova):
+    for nota in archivio_prova.tutte():
+        archivio_prova.elimina(nota.numero)
+    chiamate, _ = chiedi(grafo_completo, "Annota che il saldatore va pulito")
+    assert any(c["name"] == "aggiungi_nota" for c in chiamate), chiamate
+    assert any("saldatore" in n.testo for n in archivio_prova.tutte()), archivio_prova.tutte()
+
+
+@pytest.mark.lmstudio
+def test_note_ricerca(grafo_completo, note_di_prova):
+    chiamate, risultati = chiedi(grafo_completo, "Cosa avevo scritto sul sensore?")
+    assert any(c["name"] == "cerca_note" for c in chiamate), chiamate
+    assert any(m.name == "cerca_note" and "SEN-004" in m.content for m in risultati), risultati
+
+
+@pytest.mark.lmstudio
+def test_note_elenco(grafo_completo, note_di_prova):
+    chiamate, _ = chiedi(grafo_completo, "Quali note ho?")
+    assert any(c["name"] == "elenca_note" for c in chiamate), chiamate
+
+
+@pytest.mark.lmstudio
+def test_note_nessun_risultato(grafo_completo, note_di_prova):
+    chiamate, risultati = chiedi(grafo_completo, "Cosa avevo scritto sulla stampante?")
+    assert any(c["name"] == "cerca_note" for c in chiamate), chiamate
+    assert any(
+        m.name == "cerca_note" and "Nessuna nota trovata" in m.content for m in risultati
+    ), risultati
+
+
+@pytest.mark.lmstudio
+def test_note_eliminazione_confermata(grafo_completo, archivio_prova, note_di_prova):
+    sensore, cavi = note_di_prova
+    chiamate, pause = chiedi_con_conferma(grafo_completo, "Elimina la nota sul sensore", True)
+    assert [p["numero"] for p in pause] == [sensore], (pause, chiamate)
+    assert archivio_prova.leggi(sensore) is None
+    assert archivio_prova.leggi(cavi) is not None
+
+
+@pytest.mark.lmstudio
+def test_note_eliminazione_annullata(grafo_completo, archivio_prova, note_di_prova):
+    sensore, cavi = note_di_prova
+    chiamate, pause = chiedi_con_conferma(grafo_completo, "Elimina la nota sul sensore", False)
+    assert [p["numero"] for p in pause] == [sensore], (pause, chiamate)
+    assert archivio_prova.leggi(sensore) is not None
+    assert archivio_prova.leggi(cavi) is not None

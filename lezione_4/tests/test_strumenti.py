@@ -106,3 +106,15 @@ def test_tool_note_scrivono_nell_archivio(archivio):
     assert "Nota 1 " in per_nome["cerca_note"].invoke({"testo": "x"})
     assert per_nome["elimina_nota"].invoke({"numero": 1}) == "Nota 1 eliminata."
     assert archivio.leggi(1) is None
+
+
+def test_descrizioni_delle_note_guidano_il_modello(archivio):
+    # Il modello reale rispondeva «Ho annotato» senza chiamare aggiungi_nota e, per
+    # «Elimina la nota sul sensore», a volte non cercava il numero.
+    per_nome = {s.name: s for s in crea_strumenti(AUTUNNO, archivio=archivio)}
+    aggiunta = per_nome["aggiungi_nota"].description
+    assert "annota" in aggiunta and "ricorda" in aggiunta
+    assert "Senza questa chiamata la nota non viene salvata" in aggiunta
+    assert "numero di una nota da eliminare" in per_nome["cerca_note"].description
+    # Per «Cosa avevo scritto sulla stampante?» a volte sceglieva elenca_note.
+    assert "argomento preciso usa cerca_note" in per_nome["elenca_note"].description

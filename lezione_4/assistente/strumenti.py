@@ -105,20 +105,26 @@ def _strumenti_note(archivio: ArchivioNote) -> list[BaseTool]:
             name="aggiungi_nota",
             description=(
                 "Salva una nota personale dell'utente, che resta disponibile anche nelle "
-                "sessioni successive. Riporta il testo come l'utente l'ha detto."
+                "sessioni successive. Usalo ogni volta che l'utente dice annota, segna, "
+                "prendi nota o ricorda. Senza questa chiamata la nota non viene salvata. "
+                "Riporta il testo come l'utente l'ha detto."
             ),
         ),
         StructuredTool.from_function(
             func=elenca,
             name="elenca_note",
-            description="Elenca le note salvate dall'utente.",
+            description=(
+                "Elenca tutte le note salvate dall'utente. Per domande su un argomento "
+                "preciso usa cerca_note."
+            ),
         ),
         StructuredTool.from_function(
             func=cerca,
             name="cerca_note",
             description=(
                 "Cerca tra le note salvate quelle che contengono tutte le parole indicate. "
-                "Usa una o due parole chiave brevi, al singolare."
+                "Usa una o due parole chiave brevi, al singolare. Usalo anche per trovare il "
+                "numero di una nota da eliminare."
             ),
         ),
         StructuredTool.from_function(

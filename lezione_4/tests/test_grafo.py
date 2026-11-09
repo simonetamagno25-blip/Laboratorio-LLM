@@ -386,3 +386,15 @@ def test_prompt_di_sistema_cita_le_note():
     testo = prompt_di_sistema("Europe/Rome")
     for nome in ("aggiungi_nota", "cerca_note", "elenca_note", "elimina_nota"):
         assert nome in testo
+
+
+def test_prompt_di_sistema_impone_le_chiamate_delle_note():
+    # Il modello reale rispondeva «Ho annotato» senza chiamare aggiungi_nota e, per eliminare,
+    # chiedeva lui la conferma invece di chiamare elimina_nota (conferma doppia).
+    testo = prompt_di_sistema("Europe/Rome")
+    assert "chiama sempre aggiungi_nota" in testo
+    # «Annota che …» e «Prendi nota che …» venivano presi come frasi di conversazione.
+    assert "«annota», «prendi nota», «segna», «segnati» e «ricordami»" in testo
+    assert "non dire mai di aver salvato una nota senza averlo chiamato" in testo
+    assert "chiama subito elimina_nota" in testo
+    assert "non chiedere tu la conferma" in testo

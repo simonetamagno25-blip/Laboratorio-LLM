@@ -98,6 +98,16 @@ docker compose down
 
 `docker compose down` ferma anche il servizio `scadenze`, che altrimenti resta attivo.
 
+Le note personali (vedi «Note personali») stanno nel volume Docker `note`, montato su `/app/note`
+(`PERCORSO_DB_NOTE=/app/note/note.sqlite3`, impostato da `docker-compose.yml`). Restano anche
+quando il container viene ricreato e dopo `docker compose down`; **`docker compose down -v` cancella
+il volume e con lui tutte le note**. Prova verificata con due sessioni separate:
+
+```powershell
+"Annota che il saldatore va pulito", "/esci" | docker compose run --rm -T assistente
+"Quali note ho?", "/esci" | docker compose run --rm -T assistente
+```
+
 Sessione interattiva con terminale (TTY), verificata a mano con una tastiera reale:
 
 ```powershell

@@ -14,7 +14,8 @@ COPY tests/ tests/
 COPY pyproject.toml ./
 
 # Utente non root; /app gli appartiene così pytest può scrivere .pytest_cache.
-RUN useradd --create-home app && chown app:app /app
+# /app/note è il punto di montaggio del volume delle note: un volume nuovo ne eredita il proprietario.
+RUN useradd --create-home app && mkdir /app/note && chown app:app /app /app/note
 USER app
 
 CMD ["python", "-m", "assistente"]

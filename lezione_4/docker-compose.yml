@@ -5,6 +5,10 @@ services:
     environment:
       LMSTUDIO_BASE_URL: http://host.docker.internal:1234/v1
       SCADENZE_API_URL: http://scadenze:8000
+      PERCORSO_DB_NOTE: /app/note/note.sqlite3
+    volumes:
+      # Le note restano anche quando il container viene ricreato; `docker compose down -v` le cancella.
+      - note:/app/note
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -18,3 +22,6 @@ services:
     environment:
       SCADENZE_API_HOST: 0.0.0.0
       SCADENZE_API_PORTA: "8000"
+
+volumes:
+  note:

@@ -20,6 +20,7 @@ class Configurazione:
     max_passaggi_strumenti: int
     log_level: str
     scadenze_api_url: str
+    percorso_db_note: str
 
 
 def _obbligatoria(env: Mapping[str, str], nome: str) -> str:
@@ -65,4 +66,8 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
     if parti.scheme not in ("http", "https") or not parti.netloc:
         raise ErroreConfigurazione(f"SCADENZE_API_URL non valido: {scadenze_api_url!r}")
 
-    return Configurazione(base_url, modello, fuso, max_passaggi, log_level, scadenze_api_url)
+    percorso_db_note = env.get("PERCORSO_DB_NOTE", "").strip() or "note.sqlite3"
+
+    return Configurazione(
+        base_url, modello, fuso, max_passaggi, log_level, scadenze_api_url, percorso_db_note
+    )

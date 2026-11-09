@@ -67,3 +67,14 @@ def test_indirizzo_api_scadenze_senza_barra_finale():
 def test_indirizzo_api_scadenze_non_valido(valore):
     with pytest.raises(ErroreConfigurazione, match="SCADENZE_API_URL"):
         carica_configurazione({**BASE, "SCADENZE_API_URL": valore})
+
+
+@pytest.mark.parametrize("valore", [None, "", "   "])
+def test_percorso_note_predefinito(valore):
+    env = dict(BASE) if valore is None else {**BASE, "PERCORSO_DB_NOTE": valore}
+    assert carica_configurazione(env).percorso_db_note == "note.sqlite3"
+
+
+def test_percorso_note_personalizzato():
+    env = {**BASE, "PERCORSO_DB_NOTE": " C:/x/n.sqlite3 "}
+    assert carica_configurazione(env).percorso_db_note == "C:/x/n.sqlite3"

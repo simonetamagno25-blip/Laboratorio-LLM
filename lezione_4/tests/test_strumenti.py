@@ -67,3 +67,42 @@ def test_strumento_esposto():
     assert s.name == "ora_corrente"
     assert set(s.args) == {"fuso_orario"}
     assert s.invoke({"fuso_orario": "Europe/Rome"}) == "2026-10-26T17:05:12+01:00 (Europe/Rome)"
+
+
+NOMI_SENZA_NOTE = ["ora_corrente", "calcola", "cerca_articoli", "dettaglio_articolo"]
+NOMI_NOTE = ["aggiungi_nota", "elenca_note", "cerca_note", "elimina_nota"]
+
+
+@pytest.fixture
+def archivio():
+    from assistente.note import apri_archivio
+
+    archivio = apri_archivio(":memory:", "Europe/Rome", AUTUNNO)
+    yield archivio
+    archivio.chiudi()
+
+
+def test_senza_archivio_nessun_tool_delle_note():
+    assert [s.name for s in crea_strumenti(AUTUNNO)] == NOMI_SENZA_NOTE
+
+
+def test_con_archivio_i_quattro_tool(archivio):
+    strumenti = crea_strumenti(AUTUNNO, archivio=archivio)
+    assert [s.name for s in strumenti] == NOMI_SENZA_NOTE + NOMI_NOTE
+    per_nome = {s.name: s for s in strumenti}
+    assert all(per_nome[n].description for n in NOMI_NOTE)
+    assert "conferma" in per_nome["elimina_nota"].description
+    assert set(per_nome["aggiungi_nota"].args) == {"testo"}
+    assert set(per_nome["elenca_note"].args) == set()
+    assert set(per_nome["cerca_note"].args) == {"testo"}
+    assert set(per_nome["elimina_nota"].args) == {"numero"}
+
+
+def test_tool_note_scrivono_nell_archivio(archivio):
+    per_nome = {s.name: s for s in crea_strumenti(AUTUNNO, archivio=archivio)}
+    assert per_nome["aggiungi_nota"].invoke({"testo": "x"}) == "Nota 1 salvata: x"
+    assert archivio.leggi(1) is not None
+    assert "Nota 1 " in per_nome["elenca_note"].invoke({})
+    assert "Nota 1 " in per_nome["cerca_note"].invoke({"testo": "x"})
+    assert per_nome["elimina_nota"].invoke({"numero": 1}) == "Nota 1 eliminata."
+    assert archivio.leggi(1) is None

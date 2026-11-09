@@ -10,6 +10,7 @@ from assistente.client_mcp import ClientMCP, ErroreMCP, comando_convertitore
 from assistente.config import ErroreConfigurazione, carica_configurazione
 from assistente.grafo import costruisci_grafo, limite_ricorsione
 from assistente.modello import crea_modello
+from assistente.note import ErroreArchivio, apri_archivio
 from assistente.strumenti import crea_strumenti
 
 
@@ -35,6 +36,19 @@ def main() -> int:
         print(f"Catalogo non valido: {errore}", file=sys.stderr)
         return 4
 
+    # Anche l'archivio prima del server MCP, per lo stesso motivo.
+    try:
+        archivio = apri_archivio(config.percorso_db_note, config.fuso_predefinito)
+    except ErroreArchivio as errore:
+        print(f"Archivio note non disponibile: {errore}", file=sys.stderr)
+        return 5
+    try:
+        return _avvia(config, catalogo, archivio)
+    finally:
+        archivio.chiudi()
+
+
+def _avvia(config, catalogo, archivio) -> int:
     client_mcp = ClientMCP(*comando_convertitore())
     try:
         client_mcp.avvia()
@@ -49,13 +63,17 @@ def main() -> int:
     # Il try/finally chiude il server MCP anche con Ctrl+C o errori imprevisti.
     try:
         strumenti = (
-            crea_strumenti(catalogo=catalogo)
+            crea_strumenti(catalogo=catalogo, archivio=archivio)
             + client_mcp.strumenti()
             + crea_strumenti_api(config.scadenze_api_url)
         )
         modello = crea_modello(config, strumenti)
         grafo = costruisci_grafo(
-            modello, strumenti, config.fuso_predefinito, config.max_passaggi_strumenti
+            modello,
+            strumenti,
+            config.fuso_predefinito,
+            config.max_passaggi_strumenti,
+            archivio=archivio,
         )
         sessione = Sessione(grafo, limite_ricorsione(config.max_passaggi_strumenti))
 

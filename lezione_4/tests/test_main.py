@@ -1,5 +1,7 @@
 import sys
 
+import pytest
+
 import assistente.__main__ as punto_di_ingresso
 from assistente.catalogo import ErroreCatalogo
 
@@ -8,6 +10,12 @@ ENV = {
     "LMSTUDIO_MODEL": "m",
     "SCADENZE_API_URL": "http://localhost:8000",
 }
+
+
+@pytest.fixture(autouse=True)
+def archivio_temporaneo(monkeypatch, tmp_path):
+    # Nessun test deve creare note.sqlite3 nella cartella del progetto.
+    monkeypatch.setenv("PERCORSO_DB_NOTE", str(tmp_path / "note.sqlite3"))
 
 
 def test_server_mcp_che_non_parte_blocca_l_avvio(monkeypatch, capsys):
@@ -47,6 +55,10 @@ def test_avvio_con_tutti_gli_strumenti(monkeypatch, capsys):
         "calcola",
         "cerca_articoli",
         "dettaglio_articolo",
+        "aggiungi_nota",
+        "elenca_note",
+        "cerca_note",
+        "elimina_nota",
         "converti_unita",
         "giorni_tra_date",
         "calcola_scadenza",
@@ -79,4 +91,57 @@ def test_ctrl_c_durante_l_avvio_del_server_mcp(monkeypatch):
     monkeypatch.setattr(punto_di_ingresso.ClientMCP, "avvia", interrotto)
     monkeypatch.setattr(punto_di_ingresso.ClientMCP, "chiudi", lambda self: chiuso.append(True))
     assert punto_di_ingresso.main() == 130
+    assert chiuso
+
+
+def test_archivio_non_disponibile_blocca_l_avvio(monkeypatch, capsys, tmp_path):
+    for nome, valore in ENV.items():
+        monkeypatch.setenv(nome, valore)
+    (tmp_path / "file").write_text("x")
+    monkeypatch.setenv("PERCORSO_DB_NOTE", str(tmp_path / "file" / "note.sqlite3"))
+    avviato = []
+    monkeypatch.setattr(punto_di_ingresso.ClientMCP, "avvia", lambda self: avviato.append(True))
+    assert punto_di_ingresso.main() == 5
+    assert "Archivio note non disponibile:" in capsys.readouterr().err
+    assert not avviato
+
+
+def test_archivio_chiuso_se_mcp_non_parte(monkeypatch):
+    from assistente.note import ArchivioNote
+
+    for nome, valore in ENV.items():
+        monkeypatch.setenv(nome, valore)
+    chiuso = []
+    originale = ArchivioNote.chiudi
+
+    def registra(self):
+        chiuso.append(True)
+        originale(self)
+
+    monkeypatch.setattr(ArchivioNote, "chiudi", registra)
+    monkeypatch.setattr(
+        punto_di_ingresso,
+        "comando_convertitore",
+        lambda: (sys.executable, ["-c", "import sys; sys.exit(1)"]),
+    )
+    assert punto_di_ingresso.main() == 3
+    assert chiuso
+
+
+def test_archivio_chiuso_a_fine_sessione(monkeypatch):
+    from assistente.note import ArchivioNote
+
+    for nome, valore in ENV.items():
+        monkeypatch.setenv(nome, valore)
+    chiuso = []
+    originale = ArchivioNote.chiudi
+
+    def registra(self):
+        chiuso.append(True)
+        originale(self)
+
+    monkeypatch.setattr(ArchivioNote, "chiudi", registra)
+    monkeypatch.setattr(punto_di_ingresso, "crea_modello", lambda config, strumenti: object())
+    monkeypatch.setattr(punto_di_ingresso, "esegui_ciclo", lambda sessione, base_url: None)
+    assert punto_di_ingresso.main() == 0
     assert chiuso

@@ -2,9 +2,10 @@
 
 import json
 import re
-import unicodedata
 from dataclasses import dataclass, fields
 from pathlib import Path
+
+from assistente.testo import normalizza, parole
 
 FILE_CATALOGO = Path(__file__).parent / "dati" / "catalogo.json"
 MAX_RISULTATI = 10
@@ -109,24 +110,18 @@ def carica_catalogo(percorso: Path = FILE_CATALOGO) -> Catalogo:
     return valida_catalogo(dati)
 
 
-def _normalizza(testo: str) -> str:
-    """Minuscole e senza accenti, per confronti tolleranti."""
-    scomposto = unicodedata.normalize("NFKD", testo)
-    return "".join(c for c in scomposto if not unicodedata.combining(c)).casefold()
-
-
 def _quantita(articolo: Articolo) -> str:
     return f"{articolo.quantita} (esaurito)" if articolo.quantita == 0 else str(articolo.quantita)
 
 
 def cerca_articoli(catalogo: Catalogo, testo: str = "", categoria: str = "") -> str:
     testo, categoria = testo.strip(), categoria.strip()
-    parole = re.findall(r"\w+", _normalizza(testo))
-    if not parole and not categoria:
+    cercate = parole(testo)
+    if not cercate and not categoria:
         return "Errore: indica un testo da cercare o una categoria."
     if categoria:
         trovata = next(
-            (c for c in CATEGORIE.values() if _normalizza(c) == _normalizza(categoria)), None
+            (c for c in CATEGORIE.values() if normalizza(c) == normalizza(categoria)), None
         )
         if trovata is None:
             valide = ", ".join(CATEGORIE.values())
@@ -140,7 +135,7 @@ def cerca_articoli(catalogo: Catalogo, testo: str = "", categoria: str = "") -> 
             for a in catalogo
             if (trovata is None or a.categoria == trovata)
             and all(
-                p in _normalizza(f"{a.nome} {a.descrizione} {a.categoria}") for p in parole
+                p in normalizza(f"{a.nome} {a.descrizione} {a.categoria}") for p in cercate
             )
         ),
         key=lambda a: a.codice,

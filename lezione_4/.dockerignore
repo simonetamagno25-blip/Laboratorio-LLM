@@ -4,3 +4,5 @@
 **/.pytest_cache
 .git
 docs
+*.sqlite3
+*.sqlite3-journal

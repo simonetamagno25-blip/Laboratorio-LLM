@@ -160,3 +160,17 @@ def test_archivio_in_memoria():
         assert aggiungi_nota(archivio, "x") == "Nota 1 salvata: x"
     finally:
         archivio.chiudi()
+
+
+def test_file_in_sola_lettura(tmp_path):
+    import os
+    import stat
+
+    percorso = tmp_path / "note.sqlite3"
+    apri_archivio(percorso).chiudi()
+    os.chmod(percorso, stat.S_IREAD)
+    try:
+        with pytest.raises(ErroreArchivio):
+            apri_archivio(percorso)
+    finally:
+        os.chmod(percorso, stat.S_IREAD | stat.S_IWRITE)

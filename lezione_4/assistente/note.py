@@ -90,6 +90,8 @@ def apri_archivio(
     try:
         with connessione:
             connessione.execute(_SCHEMA)
+            # Una scrittura vera: su un file in sola lettura CREATE TABLE IF NOT EXISTS non scrive.
+            connessione.execute("PRAGMA user_version = 1")
     except sqlite3.Error as errore:
         connessione.close()
         raise ErroreArchivio(f"{percorso}: {errore}") from errore

@@ -398,3 +398,25 @@ def test_prompt_di_sistema_impone_le_chiamate_delle_note():
     assert "non dire mai di aver salvato una nota senza averlo chiamato" in testo
     assert "chiama subito elimina_nota" in testo
     assert "non chiedere tu la conferma" in testo
+
+
+@pytest.mark.parametrize("id_ripetuto", ["x", ""])
+def test_id_ripetuti_una_sola_eliminazione(archivio, id_ripetuto):
+    # Due elimina_nota con lo stesso id: un solo «sì» non deve eliminare anche la seconda nota.
+    archivio.aggiungi("prima")
+    archivio.aggiungi("seconda")
+    doppia = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "elimina_nota", "args": {"numero": 1}, "id": id_ripetuto, "type": "tool_call"},
+            {"name": "elimina_nota", "args": {"numero": 2}, "id": id_ripetuto, "type": "tool_call"},
+        ],
+    )
+    _, grafo = crea_con_note([doppia, AIMessage("fatto")], archivio)
+    esito = avvia(grafo)
+    assert [i.value["numero"] for i in esito["__interrupt__"]] == [1]
+    stato = grafo.invoke(Command(resume=True), CONFIG_NOTE)
+    assert archivio.leggi(1) is None
+    assert archivio.leggi(2) is not None
+    contenuti = [m.content for m in stato["messages"] if isinstance(m, ToolMessage)]
+    assert contenuti == ["Nota 1 eliminata.", "Errore: elimina una nota alla volta."]

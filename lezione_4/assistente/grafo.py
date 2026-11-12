@@ -33,8 +33,8 @@ MESSAGGIO_LIMITE = (
 class StatoConversazione(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     passaggi_strumenti: int
-    # Id delle chiamate elimina_nota confermate dall'utente in questo passaggio.
-    eliminazioni_confermate: NotRequired[list[str]]
+    # Chiamata elimina_nota confermata dall'utente in questo passaggio: {"id": ..., "numero": ...}.
+    eliminazioni_confermate: NotRequired[list[dict]]
 
 
 def prompt_di_sistema(fuso_predefinito: str) -> str:
@@ -122,17 +122,20 @@ def costruisci_grafo(
         )
         decisione = "confermata" if si is True else "annullata"
         log.info("eliminazione della nota %d %s", nota.numero, decisione)
-        return {"eliminazioni_confermate": [chiamata["id"]] if si is True else []}
+        confermata = {"id": chiamata["id"], "numero": nota.numero}
+        return {"eliminazioni_confermate": [confermata] if si is True else []}
 
-    def esito_eliminazione(stato: StatoConversazione, chiamata: dict) -> str | None:
-        """Risposta per una elimina_nota non confermata; None se va eseguita."""
-        if chiamata["id"] in stato.get("eliminazioni_confermate", []):
-            return None
-        if chiamata["id"] != prima_eliminazione(stato["messages"][-1])["id"]:
+    def esito_eliminazione(stato: StatoConversazione, chiamata: dict, prima: bool) -> str | None:
+        """Risposta per una elimina_nota da non eseguire; None se va eseguita."""
+        # La prima si riconosce per posizione, non per id: gli id possono ripetersi.
+        if not prima:
             return "Errore: elimina una nota alla volta."
         numero = numero_nota(chiamata["args"])
         if numero is None:
             return f"Errore: numero di nota non valido: {chiamata['args'].get('numero')!r}"
+        confermate = stato.get("eliminazioni_confermate", [])
+        if {"id": chiamata["id"], "numero": numero} in confermate:
+            return None
         if archivio.leggi(numero) is not None:
             return f"Eliminazione annullata dall'utente: la nota {numero} non è stata eliminata."
         return None  # nota inesistente: lo strumento risponde «non trovata» senza eliminare
@@ -158,13 +161,16 @@ def costruisci_grafo(
                     name=non_valida["name"],
                 )
             )
+        prima = prima_eliminazione(stato["messages"][-1])
         for chiamata in stato["messages"][-1].tool_calls:
             nome, args = chiamata["name"], chiamata["args"]
             log.info("chiamata strumento %s con argomenti %s", nome, args)
             strumento = per_nome.get(nome)
             bloccata = None
             if nome == ELIMINA and strumento is not None:
-                bloccata = esito_eliminazione(stato, chiamata)
+                bloccata = esito_eliminazione(stato, chiamata, chiamata is prima)
+                # Allo strumento arriva il numero già controllato, non l'argomento grezzo.
+                args = {"numero": numero_nota(args)}
             if strumento is None:
                 esito = f"Errore: strumento sconosciuto '{nome}'"
             elif bloccata is not None:

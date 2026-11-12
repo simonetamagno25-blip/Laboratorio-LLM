@@ -39,15 +39,17 @@ Commit sul branch, dopo il piano (`044e8f0`):
   ripetuta 3 volte passa 2/3. Le correzioni della revisione non cambiano prompt né descrizioni:
   le prove reali non sono state rieseguite dopo.
 
+- Confronto `test_catalogo_ricerca_poi_dettaglio` (2026-11-13, `google/gemma-4-e2b`, script fuori
+  dalla repository, varianti alternate): prompt e strumenti attuali **5/6**, senza paragrafo delle
+  note e senza i quattro strumenti delle note **6/6**. Nei casi superati entrambe le varianti cercano
+  con `categoria=sensori` e poi chiamano `dettaglio_articolo`; l'unico fallimento si ferma dopo la
+  ricerca. Nessuna prova che le note abbiano peggiorato la prova: variabilità del modello.
+
 ## Da fare
-1. Decidere se `test_catalogo_ricerca_poi_dettaglio` è peggiorata per il prompt delle note: quando
-   fallisce il modello cerca con `categoria=sensori` e poi non chiama `dettaglio_articolo`.
-   Confronto con il prompt precedente non fatto. Con temperatura 0 il modello varia comunque tra
-   un'esecuzione e l'altra (anche `test_note_nessun_risultato` era 5/7 prima dell'ultima modifica).
-2. Prova manuale (utente): sessione interattiva con conferma, in locale e in Docker con TTY,
+1. Prova manuale (utente): sessione interattiva con conferma, in locale e in Docker con TTY,
    compreso Ctrl+C durante `Conferma> ` (voce 10 della checklist del README, poi aggiornarla).
-3. PR `feat/note` → `dev` e merge, solo su richiesta.
-4. Poi l'esercizio **Meteo da API pubblica** (server MCP su Open-Meteo).
+2. PR `feat/note` → `dev` e merge, solo su richiesta.
+3. Poi l'esercizio **Meteo da API pubblica** (server MCP su Open-Meteo).
 
 ## Rilievi minori non corretti (revisione finale)
 - `numero` enorme (`10**20`) → `OverflowError` di SQLite: il turno fallisce, nulla eliminato.

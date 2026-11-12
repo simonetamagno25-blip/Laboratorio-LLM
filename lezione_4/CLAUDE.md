@@ -66,7 +66,8 @@ Da PowerShell, dalla cartella `lezione_4/` (comandi verificati, salvo dove indic
 - avvio locale: `.\.venv\Scripts\python -m assistente`;
 - avvio Docker (verificato, input da pipe): `docker compose build`, poi
   `"Che ore sono?", "/esci" | docker compose run --rm -T assistente`; alla fine `docker compose down`
-  (ferma anche il servizio `scadenze`);
+  (ferma anche il servizio `scadenze`; le note restano nel volume `note`, che solo
+  `docker compose down -v` cancella);
 - avvio Docker interattivo con TTY (verificato a mano): `docker compose run --rm assistente`;
 - test automatici: `.\.venv\Scripts\python -m pytest -v`;
 - test nel container: `docker compose run --rm assistente python -m pytest -v`;

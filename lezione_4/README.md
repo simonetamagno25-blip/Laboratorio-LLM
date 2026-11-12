@@ -2,7 +2,8 @@
 
 Applicazione da terminale in Python che conversa con un modello locale servito da LM Studio.
 Il flusso è un grafo LangGraph esplicito. Il modello chiede gli strumenti con il tool calling e il
-programma li esegue davvero. La cronologia dura quanto la sessione.
+programma li esegue davvero. La cronologia dura quanto la sessione; le note personali invece
+restano salvate in un file SQLite.
 
 Gli strumenti sono collegati con tre meccanismi diversi, per confrontarli:
 
@@ -11,6 +12,7 @@ Gli strumenti sono collegati con tre meccanismi diversi, per confrontarli:
 | `ora_corrente` (fuso orario esplicito) | tool locale | `assistente/strumenti.py` |
 | `calcola` (calcolatrice sicura, senza `eval`) | tool locale | `assistente/calcolatrice.py` |
 | `cerca_articoli`, `dettaglio_articolo` (catalogo del laboratorio) | tool locale | `assistente/catalogo.py`, dati in `assistente/dati/catalogo.json` |
+| `aggiungi_nota`, `elenca_note`, `cerca_note`, `elimina_nota` (note personali, eliminazione con conferma) | tool locale | `assistente/note.py`, dati in un file SQLite |
 | `converti_unita` (unità come elenco chiuso) | server MCP via stdio | `convertitore_mcp/`, avviato dall'assistente come sottoprocesso |
 | `giorni_tra_date`, `calcola_scadenza` | API HTTP | servizio `scadenze_api/`, chiamato con `httpx` da `assistente/client_api.py` |
 
@@ -42,6 +44,7 @@ Il file `.env` non va in Git. Le variabili sono:
 | `SCADENZE_API_URL` | sì | in locale `http://localhost:8000`; in Docker `http://scadenze:8000` (da `docker-compose.yml`) |
 | `SCADENZE_API_PORTA` | no | `8000` (porta del servizio `scadenze_api`) |
 | `SCADENZE_API_HOST` | no | `127.0.0.1` (solo questo computer); in Docker `0.0.0.0` (da `docker-compose.yml`) |
+| `PERCORSO_DB_NOTE` | no | `note.sqlite3`; in Docker `/app/note/note.sqlite3`, sul volume `note` (da `docker-compose.yml`) |
 
 L'identificativo del modello è quello restituito dal server:
 
@@ -146,11 +149,18 @@ Prova reale con LM Studio, attivata esplicitamente (richiede il server e `.env` 
 ```
 
 La prova reale fa una domanda per ogni strumento (ora, calcolo, conversione, giorni lavorativi),
-una conversione impossibile e cinque domande sul catalogo (ricerca, dettaglio, ricerca seguita da
-dettaglio, nessun risultato, codice inesistente); avvia da sola il servizio delle scadenze su una
-porta libera e il server MCP. Le prove controllano quali strumenti vengono chiamati e con quali
-argomenti; le risposte finali sono stampate (`-s`) e vanno lette a occhio per verificare che il
-modello non inventi articoli. Verificata con `google/gemma-4-e2b`: 10 test superati.
+una conversione impossibile, cinque domande sul catalogo (ricerca, dettaglio, ricerca seguita da
+dettaglio, nessun risultato, codice inesistente) e sei sulle note (aggiunta, ricerca, elenco,
+nessun risultato, eliminazione confermata, eliminazione annullata), in tutto 16 test; avvia da sola
+il servizio delle scadenze su una porta libera e il server MCP, e usa un archivio delle note
+temporaneo. Le prove controllano quali strumenti vengono chiamati e con quali argomenti; le risposte
+finali sono stampate (`-s`) e vanno lette a occhio per verificare che il modello non inventi
+articoli o note. Richiede 23–29 minuti.
+
+Verificata con `google/gemma-4-e2b`: 15 test superati su 16. Le sei prove delle note passano;
+`test_catalogo_ricerca_poi_dettaglio` non è stabile (ripetuta tre volte passa due): quando fallisce il
+modello cerca con `categoria=sensori` e poi non chiama `dettaglio_articolo`. Anche con temperatura 0
+il modello non risponde sempre allo stesso modo.
 
 Una risposta simulata nei test automatici non dimostra che il modello locale sappia usare lo strumento:
 solo la prova reale e le sessioni reali lo fanno.
@@ -172,6 +182,38 @@ che non risponde in tempo.
   `scadenze_api/dati/festivita_it.json` (anni 2026 e 2027; fonte: legge 260/1949 e successive
   modifiche, legge 151/2025 per il 4 ottobre). Il risultato è indicativo e non ha valore normativo.
 - **Catalogo:** sola lettura, dal file `assistente/dati/catalogo.json` (vedi sotto).
+- **Note:** testo fino a 500 caratteri; elenco e ricerca mostrano al massimo le 20 note più
+  recenti. L'eliminazione avviene solo dopo un «sì» dell'utente (vedi sotto).
+
+## Note personali
+
+Le note sono promemoria dell'utente salvati in un file SQLite che resta dopo la chiusura
+dell'assistente; la cronologia della conversazione invece sparisce, come prima. Il file è
+`PERCORSO_DB_NOTE` (predefinito `note.sqlite3` nella cartella da cui si avvia l'assistente; la
+cartella viene creata se manca). I file `*.sqlite3` sono esclusi da Git e dall'immagine Docker; in
+Docker il file sta sul volume `note` (vedi «Avvio»).
+
+Ogni nota ha un numero, che non viene mai riusato dopo un'eliminazione, la data di creazione (nel
+fuso `FUSO_ORARIO_PREDEFINITO`) e il testo.
+
+- `aggiungi_nota(testo)`: salva subito, senza conferma.
+- `elenca_note()`: tutte le note, in ordine di numero.
+- `cerca_note(testo)`: le note che contengono tutte le parole; maiuscole e accenti non contano.
+  Se non trova nulla lo dice esplicitamente.
+- `elimina_nota(numero)`: prima di eseguirla il grafo si ferma e il terminale mostra la nota presa
+  dall'archivio, non dal modello:
+
+  ```text
+  Eliminare la nota 3 (2026-11-02 14:05): "il sensore SEN-004 va ricalibrato"? [sì/no]
+  Conferma>
+  ```
+
+  `sì`, `si` o `s` (maiuscole e spazi non contano) eliminano; qualunque altra risposta, anche una
+  riga vuota, lascia la nota com'è. Ctrl+C o la fine dell'input durante la conferma chiudono
+  l'assistente senza eliminare. Si elimina una nota alla volta.
+
+Esempi di richieste: «Annota che il saldatore va pulito», «Cosa avevo scritto sul sensore?»,
+«Quali note ho?», «Elimina la nota sul sensore».
 
 ## Catalogo del laboratorio
 
@@ -203,8 +245,8 @@ umidità?», «Avete stampanti 3D?» (nessun risultato), «Dammi il dettaglio de
 
 ## Checklist manuale
 
-Da eseguire in una sessione reale, in locale e in Docker, controllando anche i log. Tutte le voci
-sono state verificate con `google/gemma-4-e2b`. Per la voce 4 con una domanda generica su Marte il
+Da eseguire in una sessione reale, in locale e in Docker, controllando anche i log. Le voci 1–9
+sono state verificate con `google/gemma-4-e2b`; la 10 in parte (vedi la voce). Per la voce 4 con una domanda generica su Marte il
 modello non chiama lo strumento: per provare l'errore serve una richiesta esplicita, per esempio
 "Usa lo strumento ora_corrente con il fuso orario Marte/Base".
 
@@ -225,6 +267,13 @@ modello non chiama lo strumento: per provare l'errore serve una richiesta esplic
    compaiono `cerca_articoli` e/o `dettaglio_articolo`; le risposte citano solo articoli, quantità
    e posizioni presenti nel file. Verificata con la prova reale e, in Docker, con
    `"Avete sensori di temperatura?", "/esci" | docker compose run --rm -T assistente`.
+10. Note: «Annota che il saldatore va pulito» chiama `aggiungi_nota`; in una sessione nuova «Quali
+    note ho?» la ritrova (in Docker grazie al volume `note`). «Elimina la nota sul saldatore» mostra
+    la riga `Conferma>`: con `no` la nota resta, con `sì` viene eliminata; Ctrl+C durante
+    `Conferma>` chiude l'assistente senza eliminare. Verificata con la prova reale e in Docker con
+    input da pipe (aggiunta, ritrovata in una seconda sessione, eliminazione con conferma);
+    **da verificare a mano** la sessione interattiva con la conferma, in locale e in Docker con TTY,
+    compreso Ctrl+C durante `Conferma>`.
 
 ## Struttura del grafo
 
@@ -233,13 +282,22 @@ flowchart TD
     START([START]) --> modello
     modello -->|nessuna chiamata a strumento| END([END])
     modello -->|chiamate e passaggi sotto il limite| strumenti
+    modello -->|chiamata a elimina_nota, sotto il limite| conferma_eliminazione
     modello -->|chiamate e limite raggiunto| limite_raggiunto
+    conferma_eliminazione -->|sì / no dell'utente| strumenti
     strumenti --> modello
     limite_raggiunto --> END
 ```
 
-Lo stato ha `messages` (la cronologia) e `passaggi_strumenti` (il contatore, azzerato a ogni domanda).
-Il limite è `MAX_PASSAGGI_STRUMENTI`. Il codice è in `assistente/grafo.py`.
+Lo stato ha `messages` (la cronologia), `passaggi_strumenti` (il contatore, azzerato a ogni domanda)
+ed `eliminazioni_confermate` (le chiamate a `elimina_nota` confermate dall'utente). Il limite è
+`MAX_PASSAGGI_STRUMENTI`. Il codice è in `assistente/grafo.py`.
+
+`conferma_eliminazione` legge la nota dall'archivio e, se esiste, ferma il grafo con `interrupt()`;
+il terminale fa la domanda e riprende il grafo con `Command(resume=True/False)`. `strumenti` esegue
+`elimina_nota` solo se la chiamata è confermata. Per fermarsi e riprendere il grafo usa un
+checkpointer in memoria (`InMemorySaver`) e un thread nuovo per ogni domanda: la cronologia resta
+quella della sessione e si aggiorna solo quando il turno finisce bene.
 
 ## Diagnosi
 
@@ -247,6 +305,10 @@ Il limite è `MAX_PASSAGGI_STRUMENTI`. Il codice è in `assistente/grafo.py`.
 `convertitore_mcp` non è partito o non ha risposto entro 30 secondi. Controllare che le dipendenze
 siano installate (`mcp` è in `requirements.txt`) e che l'assistente venga lanciato dalla cartella
 `lezione_4/`.
+
+**«Archivio note non disponibile: ...»** (l'assistente esce con codice 5): il file indicato da
+`PERCORSO_DB_NOTE` non si può creare o aprire (cartella non creabile, file non scrivibile, file che
+non è un database SQLite). Correggere il percorso o spostare il file non valido.
 
 **«Catalogo non valido: ...»** (l'assistente esce con codice 4): il messaggio indica l'articolo
 (posizione nella lista e codice) e il motivo; correggere `assistente/dati/catalogo.json`.

@@ -23,10 +23,20 @@ Commit sul branch, dopo il piano (`044e8f0`):
      in `apri_archivio` fallisce e l'assistente esce con codice 5.
 9. `4eda18e` README (note personali, variabili, grafo, diagnosi codice 5, sezione «Test» con le
    prove reali, voce 10 della checklist) e CLAUDE.md (volume e `docker compose down -v`).
+10. `4c71b04` (2026-11-13, dopo la prova manuale) CLI: prima di `Conferma>` si scarta il testo
+    scritto in anticipo (solo se l'input è un terminale: `termios.tcflush` su POSIX,
+    `FlushConsoleInputBuffer` su Windows; con il pipe nulla); dopo ogni domanda e dopo la conferma
+    compare `(attendi: il modello sta rispondendo...)`. Test: ordine scarta → `Conferma>`, avviso
+    nell'output, pipe non toccato, terminale POSIX vero con `os.openpty` (saltato su Windows).
+11. `fd80de0` README: avviso di attesa, conferma senza testo anticipato, orari UTC nei log del
+    container.
 
 ## Verifiche eseguite
 - Test automatici: `.\.venv\Scripts\python -m pytest -v` → **301 passati, 16 saltati** (prove LM
-  Studio), anche dopo il commit delle correzioni (2026-11-13).
+  Studio), anche dopo il commit delle correzioni (2026-11-13). Dopo `4c71b04`: **305 passati, 17
+  saltati** in locale (in più il test POSIX), **306 passati, 16 saltati** nel container; avvio con
+  input da pipe ok in Docker e in locale (l'avviso compare). Prove reali LM Studio non rieseguite
+  (prompt invariato).
 - Docker (prima delle correzioni della revisione): nota aggiunta da pipe e ritrovata in un secondo
   `docker compose run` separato (volume ok); eliminazione con conferma da pipe ok; dopo
   `docker compose down` il volume `lezione_4_note` resta.
@@ -45,11 +55,49 @@ Commit sul branch, dopo il piano (`044e8f0`):
   con `categoria=sensori` e poi chiamano `dettaglio_articolo`; l'unico fallimento si ferma dopo la
   ricerca. Nessuna prova che le note abbiano peggiorato la prova: variabilità del modello.
 
+## Prova manuale del 2026-11-13
+
+**Docker con TTY** (prima di `4c71b04`): aggiunta ok, elenco ok, conferma con `no` ok, Ctrl+C
+durante `Conferma>` ok (`Arrivederci.`, nota rimasta), nota ritrovata in un secondo
+`docker compose run` (volume ok). Conferma con `sì` **non provata**: il modello impiega 20–40 s,
+l'utente ha riscritto «Elimina la nota sul saldatore» perché non vedeva nulla, e quella riga,
+rimasta nel terminale, è diventata la risposta a `Conferma>` → eliminazione annullata (esito sicuro,
+ma con un `si` scritto in anticipo avrebbe eliminato). Corretto con `4c71b04`.
+
+**Locale** (dopo `4c71b04`, PowerShell): conferma con `si` ok, nota 1 eliminata (log
+`eliminazione della nota 1 confermata`, archivio `note.sqlite3` verificato vuoto). Poi **difetto
+aperto**:
+
+```text
+Tu> che note ho
+(attendi: il modello sta rispondendo...)
+Assistente> Note salvate: 1
+Nota 1 (2026-11-13 16:32): il saldatore va pulito
+```
+
+Nessuna riga `chiamata strumento` nel log: il modello **non ha chiamato `elenca_note`** e ha
+ricopiato il risultato di uno strumento rimasto nella cronologia, mostrando una nota già eliminata.
+
+Dopo `4c71b04` restano da provare: la prova del testo anticipato (scrivere `si` senza Invio
+durante «attendi...», a `Conferma>` deve essere sparito e l'Invio deve annullare), in locale e in
+Docker con TTY; l'intero giro in Docker con TTY.
+
 ## Da fare
-1. Prova manuale (utente): sessione interattiva con conferma, in locale e in Docker con TTY,
-   compreso Ctrl+C durante `Conferma> ` (voce 10 della checklist del README, poi aggiornarla).
-2. PR `feat/note` → `dev` e merge, solo su richiesta.
-3. Poi l'esercizio **Meteo da API pubblica** (server MCP su Open-Meteo).
+1. **Difetto aperto — risposta sulle note presa dalla cronologia invece che dall'archivio.**
+   Partire con `superpowers:systematic-debugging`:
+   - riprodurlo con la prova reale (aggiungi → elenca → elimina con sì → elenca: il secondo
+     elenco deve chiamare `elenca_note` e non mostrare la nota) e capire quanto è frequente;
+   - ipotesi: il prompt (`assistente/grafo.py`, righe 43–67) impone lo strumento per
+     aggiungere ma non per elencare/cercare («usa cerca_note … o elenca_note» non dice «sempre» né
+     «non rispondere dalla cronologia»); nella cronologia restano i `ToolMessage` con l'elenco
+     vecchio, che il modello ricopia;
+   - correzioni possibili da valutare con l'utente: regola esplicita nel prompt («per qualsiasi
+     domanda sulle note chiama sempre elenca_note o cerca_note: la cronologia può essere
+     superata») più una prova reale nuova per questo caso; non cambiare la cronologia senza
+     discuterne.
+2. Ripetere la prova manuale (vedi sopra), poi aggiornare la voce 10 della checklist del README.
+3. PR `feat/note` → `dev` e merge, solo su richiesta.
+4. Poi l'esercizio **Meteo da API pubblica** (server MCP su Open-Meteo).
 
 ## Rilievi minori non corretti (revisione finale)
 - `numero` enorme (`10**20`) → `OverflowError` di SQLite: il turno fallisce, nulla eliminato.

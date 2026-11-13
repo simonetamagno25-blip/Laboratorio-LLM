@@ -122,6 +122,11 @@ in PowerShell in locale, Ctrl+D nel container. Tutti verificati a mano, con un'e
 terminale integrato di VS Code Ctrl+Z non chiude l'input (vedi Diagnosi). Le chiamate agli strumenti
 compaiono nei log su stderr, per esempio `chiamata strumento ora_corrente con argomenti {...}`.
 
+Dopo ogni domanda compare `(attendi: il modello sta rispondendo...)`: la risposta può richiedere
+decine di secondi, ed è meglio aspettare il prompt successivo (`Tu>` o `Conferma>`) prima di
+scrivere. Gli orari nei log del container sono in UTC; le date delle note usano
+`FUSO_ORARIO_PREDEFINITO`.
+
 Sessione locale con input da pipe (verificata):
 
 ```powershell
@@ -211,6 +216,10 @@ fuso `FUSO_ORARIO_PREDEFINITO`) e il testo.
   `sì`, `si` o `s` (maiuscole e spazi non contano) eliminano; qualunque altra risposta, anche una
   riga vuota, lascia la nota com'è. Ctrl+C o la fine dell'input durante la conferma chiudono
   l'assistente senza eliminare. Si elimina una nota alla volta.
+
+  Nel terminale interattivo, prima di `Conferma>` l'assistente scarta quanto è stato scritto mentre
+  il modello lavorava: la conferma vale solo per la risposta data dopo aver letto la domanda. Con
+  l'input da pipe nulla viene scartato.
 
 Esempi di richieste: «Annota che il saldatore va pulito», «Cosa avevo scritto sul sensore?»,
 «Quali note ho?», «Elimina la nota sul sensore».

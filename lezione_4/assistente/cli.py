@@ -1,5 +1,6 @@
 """Interfaccia da terminale: sessione con cronologia in memoria e ciclo di lettura."""
 
+import sys
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -22,6 +23,36 @@ def domanda_conferma(dati: dict) -> str:
 
 def e_un_si(risposta: str) -> bool:
     return risposta.strip().casefold() in {"sì", "si", "s"}
+
+
+ATTESA = "(attendi: il modello sta rispondendo...)"
+
+
+def scarta_input_anticipato(ingresso=None) -> None:
+    """Scarta il testo scritto nel terminale prima che compaia la domanda di conferma.
+
+    Così la conferma vale solo per quello che si scrive dopo averla letta. Con l'input da pipe
+    non fa nulla: lì le risposte sono scritte apposta in anticipo.
+    """
+    ingresso = sys.stdin if ingresso is None else ingresso
+    try:
+        if not ingresso.isatty():
+            return
+        descrittore = ingresso.fileno()
+    except (AttributeError, ValueError, OSError):
+        return
+    if sys.platform == "win32":
+        import ctypes
+        import msvcrt
+
+        ctypes.windll.kernel32.FlushConsoleInputBuffer(msvcrt.get_osfhandle(descrittore))
+    else:
+        import termios
+
+        try:
+            termios.tcflush(descrittore, termios.TCIFLUSH)
+        except termios.error:
+            pass
 
 
 class Sessione:
@@ -59,7 +90,13 @@ class Sessione:
         return self.cronologia[-1].content or "(risposta vuota)"
 
 
-def esegui_ciclo(sessione: Sessione, base_url: str, leggi=input, scrivi=print) -> None:
+def esegui_ciclo(
+    sessione: Sessione,
+    base_url: str,
+    leggi=input,
+    scrivi=print,
+    scarta_anticipato=scarta_input_anticipato,
+) -> None:
     while True:
         try:
             riga = leggi("Tu> ").strip()
@@ -72,14 +109,17 @@ def esegui_ciclo(sessione: Sessione, base_url: str, leggi=input, scrivi=print) -
             scrivi("Arrivederci.")
             return
         try:
+            scrivi(ATTESA)
             esito = sessione.chiedi(riga)
             while isinstance(esito, Conferma):
                 scrivi(esito.domanda)
                 try:
+                    scarta_anticipato()
                     risposta = leggi("Conferma> ")
                 except (EOFError, KeyboardInterrupt):
                     scrivi("Arrivederci.")
                     return
+                scrivi(ATTESA)
                 esito = sessione.conferma(e_un_si(risposta))
             scrivi("Assistente> " + esito)
         except KeyboardInterrupt:

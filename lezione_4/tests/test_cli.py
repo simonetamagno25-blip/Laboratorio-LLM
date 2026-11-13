@@ -66,7 +66,9 @@ def ciclo(sessione, ingressi):
             raise v
         return v
 
-    esegui_ciclo(sessione, "http://x/v1", leggi=leggi, scrivi=uscite.append)
+    esegui_ciclo(
+        sessione, "http://x/v1", leggi=leggi, scrivi=uscite.append, scarta_anticipato=lambda: None
+    )
     return "\n".join(uscite)
 
 
@@ -103,7 +105,7 @@ def test_ctrl_c_durante_la_risposta_esce_pulito():
 
 # --- Note: conferma nel terminale ---
 
-from assistente.cli import Conferma, e_un_si
+from assistente.cli import ATTESA, Conferma, e_un_si
 from assistente.note import apri_archivio
 
 DOMANDA = 'Eliminare la nota 1 (2026-10-26 17:05): "sensore SEN-004 da ricalibrare"? [sì/no]'
@@ -209,8 +211,40 @@ def test_ciclo_legge_la_conferma_con_il_suo_prompt(archivio):
         prompt.append(p)
         return next(voci)
 
-    esegui_ciclo(crea_con_note(archivio), "http://x/v1", leggi=leggi, scrivi=lambda _: None)
+    esegui_ciclo(
+        crea_con_note(archivio),
+        "http://x/v1",
+        leggi=leggi,
+        scrivi=lambda _: None,
+        scarta_anticipato=lambda: None,
+    )
     assert prompt == ["Tu> ", "Conferma> ", "Tu> "]
+
+
+def test_ciclo_scarta_il_testo_scritto_prima_della_conferma(archivio):
+    # Il testo scritto mentre il modello lavora non deve diventare la risposta alla conferma.
+    eventi = []
+    voci = iter(["elimina", "no", "/esci"])
+
+    def leggi(p):
+        eventi.append(p)
+        return next(voci)
+
+    esegui_ciclo(
+        crea_con_note(archivio),
+        "http://x/v1",
+        leggi=leggi,
+        scrivi=lambda _: None,
+        scarta_anticipato=lambda: eventi.append("scarta"),
+    )
+    assert eventi == ["Tu> ", "scarta", "Conferma> ", "Tu> "]
+
+
+def test_ciclo_avvisa_che_il_modello_sta_lavorando(archivio):
+    out = ciclo(crea_con_note(archivio), ["elimina", "sì", "/esci"])
+    righe = out.split("\n")
+    # Un avviso prima della domanda di conferma e uno prima della risposta finale.
+    assert righe == [ATTESA, DOMANDA, ATTESA, "Assistente> fatto", "Arrivederci."]
 
 
 def test_turno_fallito_con_checkpointer_non_resta_nel_thread(archivio):
@@ -224,3 +258,38 @@ def test_turno_fallito_con_checkpointer_non_resta_nel_thread(archivio):
     assert sessione.chiedi("secondo") == "ok"
     umani = [m.content for m in modello.chiamate[1] if isinstance(m, HumanMessage)]
     assert umani == ["secondo"]
+
+
+# --- Testo scritto in anticipo nel terminale ---
+
+import io
+import os
+import sys
+
+from assistente.cli import scarta_input_anticipato
+
+
+def test_scarta_non_tocca_un_input_da_pipe():
+    # Con l'input da pipe le risposte sono scritte apposta in anticipo: vanno lette tutte.
+    ingresso = io.StringIO("sì\n")
+    scarta_input_anticipato(ingresso)
+    assert ingresso.readline() == "sì\n"
+
+
+def test_scarta_ignora_un_input_chiuso():
+    ingresso = io.StringIO()
+    ingresso.close()
+    scarta_input_anticipato(ingresso)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="terminale POSIX (verificato nel container)")
+def test_scarta_svuota_un_terminale_posix():
+    import select
+
+    principale, secondario = os.openpty()
+    with os.fdopen(secondario, "r") as terminale:
+        os.write(principale, b"si\n")
+        assert select.select([terminale], [], [], 1)[0], "il testo deve essere in attesa"
+        scarta_input_anticipato(terminale)
+        assert select.select([terminale], [], [], 0.2)[0] == []
+    os.close(principale)

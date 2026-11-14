@@ -1,0 +1,506 @@
+{
+  "components": {
+    "schemas": {
+      "ChatCompleta": {
+        "properties": {
+          "conferma_in_attesa": {
+            "title": "Conferma In Attesa",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "messaggi": {
+            "description": "in ordine cronologico",
+            "items": {
+              "$ref": "#/components/schemas/MessaggioJSON"
+            },
+            "title": "Messaggi",
+            "type": "array"
+          },
+          "titolo": {
+            "title": "Titolo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "titolo",
+          "messaggi",
+          "conferma_in_attesa"
+        ],
+        "title": "ChatCompleta",
+        "type": "object"
+      },
+      "ChatCreata": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "titolo": {
+            "title": "Titolo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "titolo"
+        ],
+        "title": "ChatCreata",
+        "type": "object"
+      },
+      "Conferma": {
+        "properties": {
+          "conferma": {
+            "title": "Conferma",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conferma"
+        ],
+        "title": "Conferma",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "MessaggioJSON": {
+        "properties": {
+          "creato": {
+            "format": "date-time",
+            "title": "Creato",
+            "type": "string"
+          },
+          "ruolo": {
+            "enum": [
+              "utente",
+              "assistente"
+            ],
+            "title": "Ruolo",
+            "type": "string"
+          },
+          "strumenti": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Strumenti",
+            "type": "array"
+          },
+          "testo": {
+            "title": "Testo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ruolo",
+          "testo",
+          "strumenti",
+          "creato"
+        ],
+        "title": "MessaggioJSON",
+        "type": "object"
+      },
+      "NuovoMessaggio": {
+        "properties": {
+          "testo": {
+            "title": "Testo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "testo"
+        ],
+        "title": "NuovoMessaggio",
+        "type": "object"
+      },
+      "RispostaChat": {
+        "properties": {
+          "domanda": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "domanda di conferma (solo con tipo=conferma)",
+            "title": "Domanda"
+          },
+          "risposta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risposta"
+          },
+          "strumenti": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Strumenti",
+            "type": "array"
+          },
+          "tipo": {
+            "enum": [
+              "risposta",
+              "conferma"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo"
+        ],
+        "title": "RispostaChat",
+        "type": "object"
+      },
+      "Stato": {
+        "properties": {
+          "agente": {
+            "title": "Agente",
+            "type": "string"
+          },
+          "backend": {
+            "title": "Backend",
+            "type": "string"
+          },
+          "database": {
+            "title": "Database",
+            "type": "string"
+          }
+        },
+        "required": [
+          "backend",
+          "database",
+          "agente"
+        ],
+        "title": "Stato",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VoceElenco": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "titolo": {
+            "title": "Titolo",
+            "type": "string"
+          },
+          "ultimo_messaggio": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "data dell'ultimo messaggio, se c'è",
+            "title": "Ultimo Messaggio"
+          }
+        },
+        "required": [
+          "id",
+          "titolo",
+          "ultimo_messaggio"
+        ],
+        "title": "VoceElenco",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Chat salvate in PostgreSQL; le domande vanno all'agente. È l'unico servizio che il front-end chiama.",
+    "title": "Back-end dell'assistente del laboratorio",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/chat": {
+      "get": {
+        "operationId": "elencaChat",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/VoceElenco"
+                  },
+                  "title": "Response Elencachat",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Elenca le chat"
+      },
+      "post": {
+        "operationId": "creaChat",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCreata"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Crea una chat"
+      }
+    },
+    "/api/chat/{id_chat}": {
+      "delete": {
+        "operationId": "eliminaChat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_chat",
+            "required": true,
+            "schema": {
+              "title": "Id Chat",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Elimina la chat e i suoi messaggi"
+      },
+      "get": {
+        "operationId": "leggiChat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_chat",
+            "required": true,
+            "schema": {
+              "title": "Id Chat",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompleta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Legge una chat"
+      }
+    },
+    "/api/chat/{id_chat}/conferma": {
+      "post": {
+        "operationId": "rispondiConferma",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_chat",
+            "required": true,
+            "schema": {
+              "title": "Id Chat",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Conferma"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RispostaChat"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Risponde sì o no alla conferma chiesta dall'agente"
+      }
+    },
+    "/api/chat/{id_chat}/messaggi": {
+      "post": {
+        "operationId": "inviaMessaggio",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_chat",
+            "required": true,
+            "schema": {
+              "title": "Id Chat",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuovoMessaggio"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RispostaChat"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Invia un messaggio: chiama l'agente, salva domanda e risposta"
+      }
+    },
+    "/api/stato": {
+      "get": {
+        "operationId": "statoBackend",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stato"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Back-end, database e agente"
+      }
+    }
+  }
+}

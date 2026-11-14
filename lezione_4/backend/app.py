@@ -123,20 +123,29 @@ def crea_app(archivio, agente: ClientAgente, origini: list[str] | None = None) -
         )
         return RispostaChat(tipo="risposta", risposta=esito["risposta"], strumenti=esito["strumenti"])
 
-    @app.post("/api/chat", status_code=201, response_model=ChatCreata, summary="Crea una chat")
+    @app.post(
+        "/api/chat", status_code=201, response_model=ChatCreata, summary="Crea una chat",
+        operation_id="creaChat",
+    )
     def crea():
         chat = _db(archivio.crea)
         log.info("chat %d creata", chat.id)
         return ChatCreata(id=chat.id, titolo=chat.titolo)
 
-    @app.get("/api/chat", response_model=list[VoceElenco], summary="Elenca le chat")
+    @app.get(
+        "/api/chat", response_model=list[VoceElenco], summary="Elenca le chat",
+        operation_id="elencaChat",
+    )
     def elenca():
         return [
             VoceElenco(id=c.id, titolo=c.titolo, ultimo_messaggio=c.ultimo_messaggio)
             for c in _db(archivio.elenca)
         ]
 
-    @app.get("/api/chat/{id_chat}", response_model=ChatCompleta, summary="Legge una chat")
+    @app.get(
+        "/api/chat/{id_chat}", response_model=ChatCompleta, summary="Legge una chat",
+        operation_id="leggiChat",
+    )
     def leggi(id_chat: int):
         trovata = _db(lambda: archivio.leggi(id_chat))
         if trovata is None:
@@ -154,6 +163,7 @@ def crea_app(archivio, agente: ClientAgente, origini: list[str] | None = None) -
         "/api/chat/{id_chat}/messaggi",
         response_model=RispostaChat,
         summary="Invia un messaggio: chiama l'agente, salva domanda e risposta",
+        operation_id="inviaMessaggio",
     )
     def invia(id_chat: int, messaggio: NuovoMessaggio):
         stato = stato_della_chat(id_chat)
@@ -169,6 +179,7 @@ def crea_app(archivio, agente: ClientAgente, origini: list[str] | None = None) -
         "/api/chat/{id_chat}/conferma",
         response_model=RispostaChat,
         summary="Risponde sì o no alla conferma chiesta dall'agente",
+        operation_id="rispondiConferma",
     )
     def conferma(id_chat: int, risposta: Conferma):
         stato = stato_della_chat(id_chat)
@@ -177,14 +188,20 @@ def crea_app(archivio, agente: ClientAgente, origini: list[str] | None = None) -
         esito = chiama_agente(lambda: agente.conferma(stato.id_conferma, risposta.conferma))
         return registra(id_chat, None, esito, stato)
 
-    @app.delete("/api/chat/{id_chat}", status_code=204, summary="Elimina la chat e i suoi messaggi")
+    @app.delete(
+        "/api/chat/{id_chat}", status_code=204, summary="Elimina la chat e i suoi messaggi",
+        operation_id="eliminaChat",
+    )
     def elimina(id_chat: int):
         if not _db(lambda: archivio.elimina(id_chat)):
             raise HTTPException(404, f"chat {id_chat} inesistente")
         log.info("chat %d eliminata", id_chat)
         return Response(status_code=204)
 
-    @app.get("/api/stato", response_model=Stato, summary="Back-end, database e agente")
+    @app.get(
+        "/api/stato", response_model=Stato, summary="Back-end, database e agente",
+        operation_id="statoBackend",
+    )
     def stato():
         try:
             archivio.controlla()

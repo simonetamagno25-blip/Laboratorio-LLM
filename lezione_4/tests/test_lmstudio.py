@@ -8,7 +8,8 @@ from langgraph.types import Command
 
 from assistente.config import carica_configurazione
 from assistente.grafo import costruisci_grafo, limite_ricorsione
-from assistente.modello import crea_modello
+from assistente.modello import crea_modello, crea_router
+from assistente.router import messaggio_rifiuto
 from assistente.note import apri_archivio
 from assistente.strumenti import crea_strumenti
 
@@ -74,6 +75,8 @@ def grafo_completo(servizio_scadenze, archivio_prova):
             config.fuso_predefinito,
             config.max_passaggi_strumenti,
             archivio=archivio_prova,
+            router=crea_router(config),
+            ambito=config.ambito,
         )
         yield grafo, limite_ricorsione(config.max_passaggi_strumenti)
 
@@ -254,3 +257,50 @@ def test_note_eliminazione_annullata(grafo_completo, archivio_prova, note_di_pro
     assert [p["numero"] for p in pause] == [sensore], (pause, chiamate)
     assert archivio_prova.leggi(sensore) is not None
     assert archivio_prova.leggi(cavi) is not None
+
+
+# --- Router ---
+
+
+def turno(grafo_completo, messaggi):
+    """Esegue un turno con il modello reale e stampa la decisione del router e la risposta."""
+    grafo, limite = grafo_completo
+    stato = grafo.invoke({"messages": messaggi, "passaggi_strumenti": 0}, config_turno(limite))
+    print(f"\n{messaggi[-1].content}")
+    print(f"   router: {stato.get('categoria')} — {stato.get('motivo')}")
+    print(f"-> {stato['messages'][-1].content}")
+    return stato
+
+
+@pytest.mark.lmstudio
+def test_router_in_ambito_con_strumento(grafo_completo):
+    stato = turno(grafo_completo, [HumanMessage("Che ore sono adesso a Tokyo?")])
+    assert stato["categoria"] == "conversazione", stato.get("motivo")
+    chiamate = [c for m in stato["messages"] if isinstance(m, AIMessage) for c in m.tool_calls]
+    assert any(c["name"] == "ora_corrente" for c in chiamate), stato["messages"]
+
+
+@pytest.mark.lmstudio
+def test_router_fuori_ambito(grafo_completo, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO)
+    stato = turno(grafo_completo, [HumanMessage("Dammi la ricetta della carbonara")])
+    assert stato["categoria"] == "fuori_ambito", stato.get("motivo")
+    risposte = [m for m in stato["messages"] if isinstance(m, AIMessage)]
+    assert len(risposte) == 1
+    assert risposte[0].content == messaggio_rifiuto(carica_configurazione().ambito)
+    assert not any(r.getMessage().startswith("agente:") for r in caplog.records)
+
+
+@pytest.mark.lmstudio
+def test_router_tema_del_corso(grafo_completo):
+    stato = turno(grafo_completo, [HumanMessage("Che cos'è LangGraph?")])
+    assert stato["categoria"] == "conversazione", stato.get("motivo")
+
+
+@pytest.mark.lmstudio
+def test_router_follow_up(grafo_completo):
+    primo = turno(grafo_completo, [HumanMessage("Che ore sono adesso a Tokyo?")])
+    secondo = turno(grafo_completo, primo["messages"] + [HumanMessage("e a New York?")])
+    assert secondo["categoria"] == "conversazione", secondo.get("motivo")

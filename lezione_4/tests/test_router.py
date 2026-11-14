@@ -94,3 +94,10 @@ def test_testo_ignora_indicazioni_del_revisore_e_bozze():
         "Assistente: A Tokyo sono le 00:49 e 2+2 fa 4."
     ) in testo
     assert testo.endswith("Domanda da classificare: Grazie")
+
+
+def test_prompt_domande_sull_utente_e_sulla_conversazione():
+    # Prova reale: dopo il riassunto «Come mi chiamo?» veniva rifiutata come fuori ambito.
+    prompt = prompt_router("ora e date")
+    assert "come mi chiamo" in prompt.casefold()
+    assert "conversazione in corso" in prompt

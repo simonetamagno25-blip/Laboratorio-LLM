@@ -8,11 +8,13 @@ from assistente.grafo import (
     MESSAGGIO_LIMITE,
     costruisci_grafo,
     instrada_dopo_modello,
+    instrada_dopo_router,
     limite_ricorsione,
     prompt_di_sistema,
 )
+from assistente.router import DecisioneRouter, messaggio_rifiuto
 from assistente.strumenti import crea_strumenti
-from tests.fakes import ModelloFinto, chiamata_strumento
+from tests.fakes import ModelloFinto, RouterFinto, chiamata_strumento
 
 AUTUNNO = lambda: datetime(2026, 10, 26, 16, 5, 12, tzinfo=timezone.utc)
 
@@ -420,3 +422,102 @@ def test_id_ripetuti_una_sola_eliminazione(archivio, id_ripetuto):
     assert archivio.leggi(2) is not None
     contenuti = [m.content for m in stato["messages"] if isinstance(m, ToolMessage)]
     assert contenuti == ["Nota 1 eliminata.", "Errore: elimina una nota alla volta."]
+
+
+# --- Router ---
+
+AMBITO = "ora e date"
+
+
+def decisione(categoria, motivo="motivo"):
+    return DecisioneRouter(categoria=categoria, motivo=motivo)
+
+
+def crea_con_router(decisioni, risposte):
+    router = RouterFinto(decisioni)
+    modello = ModelloFinto(risposte)
+    grafo = costruisci_grafo(
+        modello, crea_strumenti(AUTUNNO), "Europe/Rome", 3, router=router, ambito=AMBITO
+    )
+    return router, modello, grafo
+
+
+def messaggi_log(caplog):
+    return [r.getMessage() for r in caplog.records]
+
+
+def test_instradamento_dopo_router():
+    assert instrada_dopo_router({"categoria": "conversazione"}) == "agente"
+    assert instrada_dopo_router({"categoria": "fuori_ambito"}) == "rifiuto"
+
+
+def test_in_ambito_passa_all_agente(caplog):
+    caplog.set_level(logging.INFO)
+    _, modello, grafo = crea_con_router(
+        [decisione("conversazione", "domanda sull'ora")], [AIMessage("Sono le 17:05.")]
+    )
+    stato = invoca(grafo, "Che ore sono?")
+    assert stato["messages"][-1].content == "Sono le 17:05."
+    assert len(modello.chiamate) == 1
+    assert stato["categoria"] == "conversazione"
+    righe = messaggi_log(caplog)
+    instradamento = righe.index("router: categoria=conversazione motivo=domanda sull'ora -> agente")
+    assert righe.index("agente: chiamata al modello") > instradamento
+
+
+def test_fuori_ambito_rifiutato_senza_agente(caplog):
+    caplog.set_level(logging.INFO)
+    _, modello, grafo = crea_con_router([decisione("fuori_ambito", "ricetta")], [])
+    stato = invoca(grafo, "Dammi la ricetta della carbonara")
+    assert modello.chiamate == []
+    assert stato["messages"][-1].content == messaggio_rifiuto(AMBITO)
+    assert stato["categoria"] == "fuori_ambito"
+    assert stato["motivo"] == "ricetta"
+    righe = messaggi_log(caplog)
+    assert "router: categoria=fuori_ambito motivo=ricetta -> rifiuto" in righe
+    assert "rifiuto: domanda fuori ambito, agente non eseguito" in righe
+    assert not any(r.startswith("agente:") for r in righe)
+
+
+def test_router_riceve_prompt_e_testo():
+    router, _, grafo = crea_con_router([decisione("conversazione")], [AIMessage("Ciao!")])
+    invoca(grafo, "Ciao")
+    sistema, domanda = router.chiamate[0]
+    assert isinstance(sistema, SystemMessage)
+    assert AMBITO in sistema.content
+    assert domanda.content.endswith("Domanda da classificare: Ciao")
+
+
+def test_output_non_valido_passa_all_agente(caplog):
+    caplog.set_level(logging.INFO)
+    _, modello, grafo = crea_con_router([None], [AIMessage("Ciao!")])
+    stato = invoca(grafo, "Ciao")
+    assert len(modello.chiamate) == 1
+    assert stato["messages"][-1].content == "Ciao!"
+    avvisi = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("output non valido" in a for a in avvisi)
+
+
+def test_in_ambito_con_strumento():
+    router, _, grafo = crea_con_router(
+        [decisione("conversazione")],
+        [chiamata_strumento("Europe/Rome"), AIMessage("Sono le 17:05.")],
+    )
+    stato = invoca(grafo, "Che ore sono?")
+    assert any(
+        isinstance(m, ToolMessage) and m.name == "ora_corrente" for m in stato["messages"]
+    )
+    assert stato["messages"][-1].content == "Sono le 17:05."
+    assert len(router.chiamate) == 1
+
+
+def test_router_senza_ambito_rifiutato():
+    with pytest.raises(ValueError):
+        costruisci_grafo(
+            ModelloFinto([]), crea_strumenti(AUTUNNO), "Europe/Rome", 3,
+            router=RouterFinto([]), ambito="",
+        )
+
+
+def test_limite_ricorsione():
+    assert limite_ricorsione(3) == 15

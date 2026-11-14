@@ -6,6 +6,7 @@ from typing import Annotated, Literal, NotRequired, TypedDict
 from langchain_core.messages import (
     AIMessage,
     AnyMessage,
+    HumanMessage,
     RemoveMessage,
     SystemMessage,
     ToolMessage,
@@ -19,6 +20,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
 from assistente.note import ArchivioNote
+from assistente.router import messaggio_rifiuto, prompt_router, testo_da_classificare
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +37,9 @@ class StatoConversazione(TypedDict):
     passaggi_strumenti: int
     # Chiamata elimina_nota confermata dall'utente in questo passaggio: {"id": ..., "numero": ...}.
     eliminazioni_confermate: NotRequired[list[dict]]
+    # Decisione del router per la domanda corrente: "conversazione" o "fuori_ambito".
+    categoria: NotRequired[str]
+    motivo: NotRequired[str]
 
 
 def prompt_di_sistema(fuso_predefinito: str) -> str:
@@ -81,9 +86,14 @@ def instrada_dopo_modello(
     return "strumenti"
 
 
+def instrada_dopo_router(stato: StatoConversazione) -> Literal["agente", "rifiuto"]:
+    return "rifiuto" if stato.get("categoria") == "fuori_ambito" else "agente"
+
+
 def limite_ricorsione(max_passaggi: int) -> int:
-    # Ogni giro con gli strumenti conta fino a tre passi: modello, conferma, strumenti.
-    return 3 * max_passaggi + 4
+    # Ogni giro con gli strumenti conta fino a tre passi: agente, conferma, strumenti.
+    # +6: router, rifiuto, e i passi iniziali/finali.
+    return 3 * max_passaggi + 6
 
 
 def numero_nota(args: dict) -> int | None:
@@ -102,8 +112,13 @@ def costruisci_grafo(
     fuso_predefinito: str,
     max_passaggi: int,
     archivio: ArchivioNote | None = None,
+    *,
+    router: Runnable | None = None,
+    ambito: str = "",
 ) -> CompiledStateGraph:
     per_nome = {s.name: s for s in strumenti}
+    if router is not None and not ambito.strip():
+        raise ValueError("il router richiede l'ambito dell'agente")
     if ELIMINA in per_nome and archivio is None:
         raise ValueError("elimina_nota richiede l'archivio delle note per la conferma")
 
@@ -140,7 +155,33 @@ def costruisci_grafo(
             return f"Eliminazione annullata dall'utente: la nota {numero} non è stata eliminata."
         return None  # nota inesistente: lo strumento risponde «non trovata» senza eliminare
 
-    def nodo_modello(stato: StatoConversazione) -> dict:
+    def nodo_router(stato: StatoConversazione) -> dict:
+        esito = router.invoke(
+            [
+                SystemMessage(prompt_router(ambito)),
+                HumanMessage(testo_da_classificare(stato["messages"])),
+            ]
+        )
+        decisione = esito.get("parsed")
+        if decisione is None:
+            # Fail-open: un output non valido non deve bloccare una domanda legittima.
+            log.warning(
+                "router: output non valido (%s), la domanda passa all'agente",
+                esito.get("parsing_error"),
+            )
+            categoria, motivo = "conversazione", "output del router non valido"
+        else:
+            categoria, motivo = decisione.categoria, decisione.motivo
+        destinazione = instrada_dopo_router({"categoria": categoria})
+        log.info("router: categoria=%s motivo=%s -> %s", categoria, motivo, destinazione)
+        return {"categoria": categoria, "motivo": motivo}
+
+    def nodo_rifiuto(stato: StatoConversazione) -> dict:
+        log.info("rifiuto: domanda fuori ambito, agente non eseguito")
+        return {"messages": [AIMessage(messaggio_rifiuto(ambito))]}
+
+    def nodo_agente(stato: StatoConversazione) -> dict:
+        log.info("agente: chiamata al modello")
         messaggi = [SystemMessage(prompt_di_sistema(fuso_predefinito))] + stato["messages"]
         return {"messages": [modello.invoke(messaggi)]}
 
@@ -199,13 +240,22 @@ def costruisci_grafo(
         return instrada_dopo_modello(stato, max_passaggi)
 
     grafo = StateGraph(StatoConversazione)
-    grafo.add_node("modello", nodo_modello)
+    grafo.add_node("agente", nodo_agente)
     grafo.add_node("strumenti", nodo_strumenti)
     grafo.add_node("conferma_eliminazione", nodo_conferma_eliminazione)
     grafo.add_node("limite_raggiunto", nodo_limite_raggiunto)
-    grafo.add_edge(START, "modello")
+    if router is not None:
+        grafo.add_node("router", nodo_router)
+        grafo.add_node("rifiuto", nodo_rifiuto)
+        grafo.add_edge(START, "router")
+        grafo.add_conditional_edges(
+            "router", instrada_dopo_router, {"agente": "agente", "rifiuto": "rifiuto"}
+        )
+        grafo.add_edge("rifiuto", END)
+    else:
+        grafo.add_edge(START, "agente")
     grafo.add_conditional_edges(
-        "modello",
+        "agente",
         instrada,
         {
             "strumenti": "strumenti",
@@ -215,7 +265,7 @@ def costruisci_grafo(
         },
     )
     grafo.add_edge("conferma_eliminazione", "strumenti")
-    grafo.add_edge("strumenti", "modello")
+    grafo.add_edge("strumenti", "agente")
     grafo.add_edge("limite_raggiunto", END)
     # Il checkpointer (in memoria) serve solo alla pausa per la conferma.
     return grafo.compile(checkpointer=InMemorySaver() if archivio is not None else None)

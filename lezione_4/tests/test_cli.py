@@ -6,7 +6,8 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from assistente.cli import Sessione, esegui_ciclo
 from assistente.grafo import costruisci_grafo, limite_ricorsione
 from assistente.strumenti import crea_strumenti
-from tests.fakes import ModelloFinto, chiamata_strumento
+from assistente.router import DecisioneRouter
+from tests.fakes import ModelloFinto, RouterFinto, chiamata_strumento
 
 AUTUNNO = lambda: datetime(2026, 10, 26, 16, 5, 12, tzinfo=timezone.utc)
 
@@ -293,3 +294,50 @@ def test_scarta_svuota_un_terminale_posix():
         scarta_input_anticipato(terminale)
         assert select.select([terminale], [], [], 0.2)[0] == []
     os.close(principale)
+
+
+# --- Router ---
+
+
+def test_conferma_note_non_riesegue_il_router(archivio):
+    nota = archivio.aggiungi("comprare cavi")
+    router = RouterFinto([DecisioneRouter(categoria="conversazione", motivo="note")])
+    modello = ModelloFinto(
+        [
+            chiamata_strumento(None, nome="elimina_nota", args={"numero": nota.numero}),
+            AIMessage("fatto"),
+        ]
+    )
+    grafo = costruisci_grafo(
+        modello,
+        crea_strumenti(AUTUNNO, archivio=archivio),
+        "Europe/Rome",
+        3,
+        archivio=archivio,
+        router=router,
+        ambito="note",
+    )
+    sessione = Sessione(grafo, limite_ricorsione(3))
+    assert isinstance(sessione.chiedi("elimina la nota sui cavi"), Conferma)
+    assert sessione.conferma(True) == "fatto"
+    assert len(router.chiamate) == 1
+    assert archivio.leggi(nota.numero) is None
+
+
+def test_errore_del_router_non_tocca_la_cronologia():
+    router = RouterFinto(
+        [DecisioneRouter(categoria="conversazione", motivo="saluto"), RuntimeError("giù")]
+    )
+    grafo = costruisci_grafo(
+        ModelloFinto([AIMessage("Ciao!")]),
+        crea_strumenti(AUTUNNO),
+        "Europe/Rome",
+        3,
+        router=router,
+        ambito="ora e date",
+    )
+    sessione = Sessione(grafo, limite_ricorsione(3))
+    assert sessione.chiedi("Ciao") == "Ciao!"
+    with pytest.raises(RuntimeError):
+        sessione.chiedi("Che ore sono?")
+    assert len(sessione.cronologia) == 2

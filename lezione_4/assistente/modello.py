@@ -71,6 +71,12 @@ def crea_revisore(config: Configurazione) -> Runnable:
 
 
 def descrivi_errore(exc: Exception, base_url: str) -> str:
+    # APITimeoutError è una sottoclasse di APIConnectionError: va controllata prima.
+    if isinstance(exc, openai.APITimeoutError):
+        return (
+            f"LM Studio non ha risposto in tempo su {base_url} (modello occupato o risposta "
+            "troppo lunga). Riprova tra poco."
+        )
     if isinstance(exc, openai.APIConnectionError):
         return f"LM Studio non raggiungibile su {base_url}. È avviato con il server attivo?"
     if isinstance(exc, openai.APIStatusError):

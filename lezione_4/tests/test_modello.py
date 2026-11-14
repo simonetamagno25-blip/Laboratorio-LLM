@@ -104,3 +104,11 @@ def test_crea_riassuntore_e_il_modello_senza_strumenti():
 def test_timeout_del_modello_abbastanza_lungo_per_le_spiegazioni():
     # Prova reale: /prompt spiega con gemma-4-e2b superava i 120 secondi (ReadTimeout).
     assert modulo_modello._chat(CONFIG).request_timeout >= 300
+
+
+def test_descrivi_errore_timeout_non_e_irraggiungibile():
+    # APITimeoutError è una sottoclasse di APIConnectionError: va distinta.
+    exc = openai.APITimeoutError(request=httpx.Request("POST", "http://x"))
+    testo = descrivi_errore(exc, "http://localhost:1234/v1")
+    assert testo.startswith("LM Studio non ha risposto in tempo")
+    assert "non raggiungibile" not in testo

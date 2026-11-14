@@ -8,7 +8,7 @@ from langgraph.types import Command
 
 from assistente.config import carica_configurazione
 from assistente.grafo import costruisci_grafo, limite_ricorsione
-from assistente.modello import crea_modello, crea_router
+from assistente.modello import crea_modello, crea_revisore, crea_router
 from assistente.router import messaggio_rifiuto
 from assistente.note import apri_archivio
 from assistente.strumenti import crea_strumenti
@@ -77,8 +77,10 @@ def grafo_completo(servizio_scadenze, archivio_prova):
             archivio=archivio_prova,
             router=crea_router(config),
             ambito=config.ambito,
+            revisore=crea_revisore(config),
+            max_revisioni=config.max_revisioni,
         )
-        yield grafo, limite_ricorsione(config.max_passaggi_strumenti)
+        yield grafo, limite_ricorsione(config.max_passaggi_strumenti, config.max_revisioni)
 
 
 @pytest.mark.lmstudio
@@ -312,3 +314,74 @@ def test_router_seguito_fuori_ambito(grafo_completo):
     assert primo["categoria"] == "fuori_ambito", primo.get("motivo")
     secondo = turno(grafo_completo, primo["messages"] + [HumanMessage("e quella dell'amatriciana?")])
     assert secondo["categoria"] == "fuori_ambito", secondo.get("motivo")
+
+
+# --- Revisore ---
+
+
+@pytest.mark.lmstudio
+def test_revisore_risposta_coerente(grafo_completo, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO)
+    stato = turno(grafo_completo, [HumanMessage("Che ore sono adesso a Tokyo?")])
+    righe = [r.getMessage() for r in caplog.records if r.getMessage().startswith("revisore:")]
+    for riga in righe:
+        print(f"   {riga}")
+    assert stato.get("revisioni", 0) == 0, righe
+    assert righe and righe[0].startswith("revisore: coerente=sì"), righe
+
+
+class PrimaRispostaForzata:
+    """Modello reale, ma la prima risposta dell'agente è decisa dal test (parziale)."""
+
+    def __init__(self, modello, risposta: str):
+        self._modello = modello
+        self._risposta = risposta
+        self.chiamate = 0
+
+    def invoke(self, messaggi, config=None):
+        self.chiamate += 1
+        if self.chiamate == 1:
+            return AIMessage(self._risposta)
+        return self._modello.invoke(messaggi, config)
+
+
+@pytest.mark.lmstudio
+def test_revisore_risposta_parziale_corretta(caplog):
+    import logging
+
+    caplog.set_level(logging.INFO)
+    config = carica_configurazione()
+    strumenti = crea_strumenti()
+    agente = PrimaRispostaForzata(
+        crea_modello(config, strumenti), "Adesso a Tokyo sono le 00:49 del 15 novembre."
+    )
+    grafo = costruisci_grafo(
+        agente,
+        strumenti,
+        config.fuso_predefinito,
+        config.max_passaggi_strumenti,
+        revisore=crea_revisore(config),
+        max_revisioni=config.max_revisioni,
+    )
+    # «17 * 23» e non «17 per 23»: il modello ha letto «per» come una divisione.
+    domanda = "Che ore sono a Tokyo e quanto fa 17 * 23?"
+    stato = grafo.invoke(
+        {"messages": [HumanMessage(domanda)], "passaggi_strumenti": 0, "revisioni": 0},
+        {"recursion_limit": limite_ricorsione(config.max_passaggi_strumenti, config.max_revisioni)},
+    )
+    righe = [r.getMessage() for r in caplog.records if r.getMessage().startswith("revisore:")]
+    print(f"\n{domanda}")
+    for riga in righe:
+        print(f"   {riga}")
+    print(f"-> {stato['messages'][-1].content}")
+    # Il revisore reale rifiuta la risposta parziale con un motivo...
+    assert righe[0].startswith("revisore: coerente=no"), righe
+    assert stato["revisioni"] >= 1
+    # ...e l'agente reale completa la risposta con il calcolo. Con la prima risposta forzata
+    # (senza strumenti) il modello tende a calcolare a mente: si stampa se ha usato calcola,
+    # ma l'evidenza dello step è la risposta completa dopo il rifiuto.
+    chiamate = [c for m in stato["messages"] if isinstance(m, AIMessage) for c in m.tool_calls]
+    print(f"   strumenti chiamati: {[c['name'] for c in chiamate]}")
+    assert "391" in stato["messages"][-1].content, stato["messages"][-1].content

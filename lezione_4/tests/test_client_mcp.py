@@ -140,3 +140,58 @@ def test_lettura_della_resource_nei_log(caplog):
     assert any(
         r.getMessage().startswith("resources/read utente://preferenze:") for r in caplog.records
     )
+
+
+# --- Prompt MCP ---
+
+
+@pytest.fixture(scope="module")
+def client_prompt():
+    with ClientMCP(*comando_convertitore()) as client:
+        yield client
+
+
+def test_elenco_dei_prompt(client_prompt):
+    elenco = {p.nome: p for p in client_prompt.elenca_prompt()}
+    assert set(elenco) == {"spiega", "riassumi_conversazione"}
+    spiega = elenco["spiega"]
+    assert spiega.descrizione
+    argomenti = {a.nome: a.obbligatorio for a in spiega.argomenti}
+    assert argomenti == {"argomento": True, "livello": False}
+    assert {a.nome: a.obbligatorio for a in elenco["riassumi_conversazione"].argomenti} == {
+        "stile": False
+    }
+
+
+def test_prompt_spiega(client_prompt):
+    messaggi = client_prompt.ottieni_prompt(
+        "spiega", {"argomento": "Model Context Protocol", "livello": "base"}
+    )
+    assert len(messaggi) == 1
+    ruolo, testo = messaggi[0]
+    assert ruolo == "user"
+    assert "Model Context Protocol" in testo
+    assert "base" in testo
+
+
+def test_prompt_riassumi_conversazione_predefinito(client_prompt):
+    ((ruolo, testo),) = client_prompt.ottieni_prompt("riassumi_conversazione", {})
+    assert ruolo == "user"
+    assert "sintetico" in testo
+
+
+def test_prompt_livello_fuori_elenco(client_prompt):
+    # Il server non inoltra il dettaglio: la CLI rimanda a /prompts per gli argomenti ammessi.
+    with pytest.raises(ErroreMCP, match="spiega"):
+        client_prompt.ottieni_prompt("spiega", {"argomento": "x", "livello": "esperto"})
+
+
+def test_prompt_nei_log(client_prompt, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO)
+    client_prompt.elenca_prompt()
+    client_prompt.ottieni_prompt("spiega", {"argomento": "MCP"})
+    righe = [r.getMessage() for r in caplog.records]
+    assert any(r.startswith("prompts/list: ") for r in righe)
+    assert any(r.startswith("prompts/get spiega {'argomento': 'MCP'}: 1 messaggi") for r in righe)

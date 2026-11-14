@@ -11,6 +11,7 @@ import sys
 import tempfile
 import threading
 from contextlib import AsyncExitStack
+from dataclasses import dataclass
 from pathlib import Path
 
 from langchain_core.tools import BaseTool, StructuredTool
@@ -24,6 +25,20 @@ CARTELLA_PROGETTO = Path(__file__).resolve().parent.parent
 
 class ErroreMCP(RuntimeError):
     """Il server MCP non è partito o non ha risposto."""
+
+
+@dataclass(frozen=True)
+class ArgomentoPrompt:
+    nome: str
+    descrizione: str
+    obbligatorio: bool
+
+
+@dataclass(frozen=True)
+class InfoPrompt:
+    nome: str
+    descrizione: str
+    argomenti: tuple[ArgomentoPrompt, ...]
 
 
 def comando_convertitore() -> tuple[str, list[str]]:
@@ -139,18 +154,58 @@ class ClientMCP:
             testo = f"Errore: {testo}"
         return testo
 
-    def leggi_risorsa(self, uri: str) -> str:
-        """resources/read: la decide l'host, non il modello. Errori → ErroreMCP."""
+    def _attendi(self, coroutine, descrizione: str):
+        """Esegue una richiesta MCP nel loop di fondo; errori e timeout → ErroreMCP."""
         if self._sessione is None or self._loop is None:
+            coroutine.close()
             raise ErroreMCP("sessione chiusa")
-        futuro = asyncio.run_coroutine_threadsafe(self._sessione.read_resource(uri), self._loop)
+        futuro = asyncio.run_coroutine_threadsafe(coroutine, self._loop)
         try:
-            risultato = futuro.result(timeout=self._timeout)
+            return futuro.result(timeout=self._timeout)
         except concurrent.futures.TimeoutError:
             futuro.cancel()
-            raise ErroreMCP(f"timeout nella lettura di {uri}") from None
+            raise ErroreMCP(f"timeout in {descrizione}") from None
         except Exception as errore:
             raise ErroreMCP(f"{type(errore).__name__}: {errore}") from errore
+
+    def elenca_prompt(self) -> list[InfoPrompt]:
+        """prompts/list: nome, descrizione e argomenti di ogni prompt del server."""
+        risultato = self._attendi(self._sessione_attiva().list_prompts(), "prompts/list")
+        elenco = [
+            InfoPrompt(
+                nome=p.name,
+                descrizione=(p.description or "").strip(),
+                argomenti=tuple(
+                    ArgomentoPrompt(a.name, (a.description or "").strip(), bool(a.required))
+                    for a in (p.arguments or [])
+                ),
+            )
+            for p in risultato.prompts
+        ]
+        log.info("prompts/list: %s", [p.nome for p in elenco])
+        return elenco
+
+    def ottieni_prompt(self, nome: str, argomenti: dict[str, str]) -> list[tuple[str, str]]:
+        """prompts/get: i messaggi compilati dal server, come coppie (ruolo, testo)."""
+        risultato = self._attendi(
+            self._sessione_attiva().get_prompt(nome, argomenti), f"prompts/get {nome}"
+        )
+        messaggi = [
+            (m.role, getattr(m.content, "text", "")) for m in risultato.messages
+        ]
+        log.info("prompts/get %s %s: %d messaggi", nome, argomenti, len(messaggi))
+        for ruolo, testo in messaggi:
+            log.info("prompts/get %s -> %s: %s", nome, ruolo, testo)
+        return messaggi
+
+    def _sessione_attiva(self) -> ClientSession:
+        if self._sessione is None:
+            raise ErroreMCP("sessione chiusa")
+        return self._sessione
+
+    def leggi_risorsa(self, uri: str) -> str:
+        """resources/read: la decide l'host, non il modello. Errori → ErroreMCP."""
+        risultato = self._attendi(self._sessione_attiva().read_resource(uri), f"lettura di {uri}")
         testo = "".join(getattr(c, "text", "") for c in risultato.contents)
         log.info("resources/read %s: %d caratteri", uri, len(testo))
         return testo

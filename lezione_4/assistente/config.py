@@ -26,6 +26,8 @@ class Configurazione:
     soglia_riassunto: int = 20
     messaggi_conservati: int = 6
     percorso_preferenze: str = "preferenze.json"
+    agente_host: str = "127.0.0.1"
+    agente_porta: int = 8100
 
 
 def _obbligatoria(env: Mapping[str, str], nome: str) -> str:
@@ -84,6 +86,11 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
             f"SOGLIA_RIASSUNTO ({soglia_riassunto})"
         )
     percorso_preferenze = env.get("PERCORSO_PREFERENZE", "").strip() or "preferenze.json"
+    # Servizio HTTP dell'agente: in locale solo su 127.0.0.1; Docker Compose imposta 0.0.0.0.
+    agente_host = env.get("AGENTE_HOST", "").strip() or "127.0.0.1"
+    agente_porta = _intero_positivo(env, "AGENTE_PORTA", "8100")
+    if agente_porta > 65535:
+        raise ErroreConfigurazione(f"AGENTE_PORTA non valida: {agente_porta}")
 
     return Configurazione(
         base_url,
@@ -98,4 +105,6 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
         soglia_riassunto,
         messaggi_conservati,
         percorso_preferenze,
+        agente_host,
+        agente_porta,
     )

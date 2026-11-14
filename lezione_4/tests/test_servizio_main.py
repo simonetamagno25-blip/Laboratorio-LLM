@@ -4,7 +4,7 @@ import pytest
 
 from assistente.grafo import limite_ricorsione
 
-import assistente.__main__ as punto_di_ingresso
+import assistente.servizio as punto_di_ingresso
 from assistente.catalogo import ErroreCatalogo
 from tests.fakes import RouterFinto
 
@@ -38,22 +38,18 @@ def test_avvio_con_tutti_gli_strumenti(monkeypatch, capsys):
     for nome, valore in ENV.items():
         monkeypatch.setenv(nome, valore)
     nomi = []
-
-    def ciclo_finto(sessione, base_url, **_):
-        nomi.extend(sessione.nomi_strumenti)
-
     grafi = []
     ambiti = []
-
     limiti = []
+    serviti = []
 
-    class SessioneFinta:
+    class AgenteFinto:
         def __init__(self, grafo, limite):
             grafi.append(grafo)
             limiti.append(limite)
 
     def crea_modello_finto(config, strumenti):
-        SessioneFinta.nomi_strumenti = [s.name for s in strumenti]
+        nomi.extend(s.name for s in strumenti)
         return object()
 
     def crea_router_finto(config):
@@ -62,9 +58,12 @@ def test_avvio_con_tutti_gli_strumenti(monkeypatch, capsys):
 
     monkeypatch.setattr(punto_di_ingresso, "crea_modello", crea_modello_finto)
     monkeypatch.setattr(punto_di_ingresso, "crea_router", crea_router_finto)
-    monkeypatch.setattr(punto_di_ingresso, "Sessione", SessioneFinta)
-    monkeypatch.setattr(punto_di_ingresso, "esegui_ciclo", ciclo_finto)
+    monkeypatch.setattr(punto_di_ingresso, "Agente", AgenteFinto)
+    monkeypatch.setattr(
+        punto_di_ingresso, "servi", lambda app, host, porta: serviti.append((host, porta))
+    )
     assert punto_di_ingresso.main() == 0
+    assert serviti == [("127.0.0.1", 8100)]
     assert nomi == [
         "ora_corrente",
         "calcola",
@@ -163,7 +162,7 @@ def test_archivio_chiuso_a_fine_sessione(monkeypatch):
     monkeypatch.setattr(ArchivioNote, "chiudi", registra)
     monkeypatch.setattr(punto_di_ingresso, "crea_modello", lambda config, strumenti: object())
     monkeypatch.setattr(punto_di_ingresso, "crea_router", lambda config: object())
-    monkeypatch.setattr(punto_di_ingresso, "esegui_ciclo", lambda sessione, base_url, **_: None)
+    monkeypatch.setattr(punto_di_ingresso, "servi", lambda app, host, porta: None)
     assert punto_di_ingresso.main() == 0
     assert chiuso
 
@@ -189,7 +188,7 @@ def test_avvio_legge_le_preferenze_dalla_resource(monkeypatch, tmp_path, caplog)
 
     monkeypatch.setattr(punto_di_ingresso, "costruisci_grafo", costruisci_e_registra)
     monkeypatch.setattr(punto_di_ingresso, "crea_modello", lambda config, strumenti: object())
-    monkeypatch.setattr(punto_di_ingresso, "esegui_ciclo", lambda sessione, base_url, **_: None)
+    monkeypatch.setattr(punto_di_ingresso, "servi", lambda app, host, porta: None)
     caplog.set_level(logging.INFO)
     assert punto_di_ingresso.main() == 0
     assert ricevute[0].fuso_orario == "America/New_York"
@@ -199,15 +198,18 @@ def test_avvio_legge_le_preferenze_dalla_resource(monkeypatch, tmp_path, caplog)
     assert "preferenze: lingua=inglese fuso_orario=America/New_York stile=dettagliato" in righe
 
 
-def test_avvio_passa_il_client_mcp_ai_comandi_prompt(monkeypatch):
+def test_avvio_passa_il_client_mcp_all_api(monkeypatch):
     for nome, valore in ENV.items():
         monkeypatch.setenv(nome, valore)
     ricevuti = []
+    originale = punto_di_ingresso.crea_app
+
+    def crea_e_registra(agente, **kwargs):
+        ricevuti.append(kwargs["mcp"])
+        return originale(agente, **kwargs)
+
     monkeypatch.setattr(punto_di_ingresso, "crea_modello", lambda config, strumenti: object())
-    monkeypatch.setattr(
-        punto_di_ingresso,
-        "esegui_ciclo",
-        lambda sessione, base_url, prompt=None: ricevuti.append(prompt),
-    )
+    monkeypatch.setattr(punto_di_ingresso, "crea_app", crea_e_registra)
+    monkeypatch.setattr(punto_di_ingresso, "servi", lambda app, host, porta: None)
     assert punto_di_ingresso.main() == 0
     assert hasattr(ricevuti[0], "elenca_prompt")

@@ -3,7 +3,7 @@ import httpx
 import openai
 from langchain_core.runnables import Runnable
 
-from assistente.__main__ import main
+from assistente.servizio import main
 from assistente.config import Configurazione
 from assistente.modello import crea_modello, crea_router, descrivi_errore
 from assistente.strumenti import crea_strumenti

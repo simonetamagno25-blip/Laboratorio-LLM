@@ -131,3 +131,16 @@ def test_percorso_preferenze():
     assert carica_configurazione(BASE).percorso_preferenze == "preferenze.json"
     env = {**BASE, "PERCORSO_PREFERENZE": " C:/x/pref.json "}
     assert carica_configurazione(env).percorso_preferenze == "C:/x/pref.json"
+
+
+def test_indirizzo_del_servizio_agente():
+    c = carica_configurazione(BASE)
+    assert (c.agente_host, c.agente_porta) == ("127.0.0.1", 8100)
+    c = carica_configurazione({**BASE, "AGENTE_HOST": "0.0.0.0", "AGENTE_PORTA": "9000"})
+    assert (c.agente_host, c.agente_porta) == ("0.0.0.0", 9000)
+
+
+@pytest.mark.parametrize("valore", ["0", "70000", "porta"])
+def test_porta_agente_non_valida(valore):
+    with pytest.raises(ErroreConfigurazione, match="AGENTE_PORTA"):
+        carica_configurazione({**BASE, "AGENTE_PORTA": valore})

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assistente del laboratorio</title>
+    <link rel="stylesheet" href="stile.css" />
+    <!-- Indirizzo del back-end: generato da configurazione (BACKEND_URL), non scritto nel codice. -->
+    <script src="config.js"></script>
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <aside class="laterale" aria-label="Chat salvate">
+      <header class="laterale__testa">
+        <h1>Assistente del laboratorio</h1>
+        <button id="nuova-chat" class="pulsante pulsante--primario" type="button">+ Nuova chat</button>
+      </header>
+      <ul id="elenco-chat" class="elenco"></ul>
+      <p id="elenco-vuoto" class="nota" hidden>Nessuna chat: creane una nuova.</p>
+    </aside>
+
+    <main class="principale">
+      <div id="errore" class="avviso" role="alert" hidden>
+        <span id="errore-testo"></span>
+        <button id="errore-chiudi" class="pulsante pulsante--leggero" type="button" aria-label="Chiudi l'avviso">×</button>
+      </div>
+
+      <section id="vuoto" class="vuoto">
+        <h2>Nessuna chat aperta</h2>
+        <p>Crea una nuova chat o scegline una dall'elenco. Puoi chiedere l'ora nei vari fusi orari,
+          fare calcoli e conversioni, cercare il materiale del laboratorio o salvare note.</p>
+      </section>
+
+      <section id="chat" class="chat" hidden>
+        <h2 id="titolo-chat" class="chat__titolo"></h2>
+        <ol id="messaggi" class="messaggi" aria-live="polite"></ol>
+        <p id="attesa" class="attesa" hidden>L'assistente sta rispondendo… (con un modello locale può servire qualche minuto)</p>
+
+        <div id="conferma" class="conferma" hidden>
+          <p id="conferma-domanda"></p>
+          <button id="conferma-si" class="pulsante pulsante--pericolo" type="button">Sì, elimina</button>
+          <button id="conferma-no" class="pulsante" type="button">No</button>
+        </div>
+
+        <form id="modulo" class="modulo">
+          <label for="domanda" class="nascosto">Domanda</label>
+          <textarea id="domanda" rows="2" placeholder="Scrivi una domanda… (Invio per inviare, Maiusc+Invio per andare a capo)"></textarea>
+          <button id="invia" class="pulsante pulsante--primario" type="submit">Invia</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

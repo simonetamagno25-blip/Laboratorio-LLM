@@ -1,3 +1,6 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["lmstudio: prova reale con LM Studio, richiede --lmstudio"]
+markers = [
+    "lmstudio: prova reale con LM Studio, richiede --lmstudio",
+    "postgres: archivio PostgreSQL reale, richiede --postgres e POSTGRES_TEST_URL",
+]

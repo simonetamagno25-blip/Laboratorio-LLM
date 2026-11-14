@@ -8,15 +8,22 @@ def pytest_addoption(parser):
         default=False,
         help="esegue le prove reali con LM Studio",
     )
+    parser.addoption(
+        "--postgres",
+        action="store_true",
+        default=False,
+        help="esegue i test dell'archivio PostgreSQL (serve POSTGRES_TEST_URL)",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--lmstudio"):
-        return
-    salta = pytest.mark.skip(reason="richiede --lmstudio")
-    for item in items:
-        if "lmstudio" in item.keywords:
-            item.add_marker(salta)
+    for opzione in ("lmstudio", "postgres"):
+        if config.getoption(f"--{opzione}"):
+            continue
+        salta = pytest.mark.skip(reason=f"richiede --{opzione}")
+        for item in items:
+            if opzione in item.keywords:
+                item.add_marker(salta)
 
 
 @pytest.fixture(scope="session")

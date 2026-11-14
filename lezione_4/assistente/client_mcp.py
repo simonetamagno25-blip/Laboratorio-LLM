@@ -15,7 +15,7 @@ from pathlib import Path
 
 from langchain_core.tools import BaseTool, StructuredTool
 from mcp import ClientSession
-from mcp.client.stdio import StdioServerParameters, stdio_client
+from mcp.client.stdio import StdioServerParameters, get_default_environment, stdio_client
 
 log = logging.getLogger(__name__)
 
@@ -37,9 +37,15 @@ class ClientMCP:
         argomenti: list[str],
         timeout: float = 15.0,
         timeout_avvio: float = 30.0,
+        ambiente: dict[str, str] | None = None,
     ):
+        # Il client stdio passa al server solo un sottoinsieme sicuro dell'ambiente:
+        # le variabili che servono al server vanno aggiunte qui.
         self._parametri = StdioServerParameters(
-            command=comando, args=argomenti, cwd=str(CARTELLA_PROGETTO)
+            command=comando,
+            args=argomenti,
+            cwd=str(CARTELLA_PROGETTO),
+            env={**get_default_environment(), **ambiente} if ambiente else None,
         )
         self._timeout = timeout
         self._timeout_avvio = timeout_avvio
@@ -131,6 +137,22 @@ class ClientMCP:
         testo = "".join(c.text for c in risultato.content if c.type == "text")
         if risultato.is_error and not testo.startswith("Errore"):
             testo = f"Errore: {testo}"
+        return testo
+
+    def leggi_risorsa(self, uri: str) -> str:
+        """resources/read: la decide l'host, non il modello. Errori → ErroreMCP."""
+        if self._sessione is None or self._loop is None:
+            raise ErroreMCP("sessione chiusa")
+        futuro = asyncio.run_coroutine_threadsafe(self._sessione.read_resource(uri), self._loop)
+        try:
+            risultato = futuro.result(timeout=self._timeout)
+        except concurrent.futures.TimeoutError:
+            futuro.cancel()
+            raise ErroreMCP(f"timeout nella lettura di {uri}") from None
+        except Exception as errore:
+            raise ErroreMCP(f"{type(errore).__name__}: {errore}") from errore
+        testo = "".join(getattr(c, "text", "") for c in risultato.contents)
+        log.info("resources/read %s: %d caratteri", uri, len(testo))
         return testo
 
     def strumenti(self) -> list[BaseTool]:

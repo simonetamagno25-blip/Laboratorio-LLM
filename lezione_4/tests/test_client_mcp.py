@@ -95,3 +95,48 @@ def test_server_muto_scade_al_timeout_di_avvio():
     muto = ["-c", "import time; time.sleep(30)"]
     with pytest.raises(ErroreMCP, match="entro 2 secondi"):
         ClientMCP(sys.executable, muto, timeout_avvio=2).avvia()
+
+
+# --- Resource utente://preferenze ---
+
+import json
+
+
+def test_resource_preferenze_dal_file_indicato(tmp_path):
+    file = tmp_path / "preferenze.json"
+    file.write_text(
+        json.dumps({"lingua": "inglese", "fuso_orario": "America/New_York", "stile": "dettagliato"}),
+        encoding="utf-8",
+    )
+    ambiente = {"PERCORSO_PREFERENZE": str(file)}
+    with ClientMCP(*comando_convertitore(), ambiente=ambiente) as client:
+        testo = client.leggi_risorsa("utente://preferenze")
+        # La resource non diventa uno strumento.
+        assert [s.name for s in client.strumenti()] == ["converti_unita"]
+    assert json.loads(testo)["fuso_orario"] == "America/New_York"
+
+
+def test_resource_preferenze_predefinita():
+    with ClientMCP(*comando_convertitore()) as client:
+        testo = client.leggi_risorsa("utente://preferenze")
+    assert json.loads(testo) == {
+        "lingua": "italiano", "fuso_orario": "Europe/Rome", "stile": "sintetico"
+    }
+
+
+def test_resource_preferenze_file_mancante(tmp_path):
+    ambiente = {"PERCORSO_PREFERENZE": str(tmp_path / "manca.json")}
+    with ClientMCP(*comando_convertitore(), ambiente=ambiente) as client:
+        with pytest.raises(ErroreMCP):
+            client.leggi_risorsa("utente://preferenze")
+
+
+def test_lettura_della_resource_nei_log(caplog):
+    import logging
+
+    caplog.set_level(logging.INFO)
+    with ClientMCP(*comando_convertitore()) as client:
+        client.leggi_risorsa("utente://preferenze")
+    assert any(
+        r.getMessage().startswith("resources/read utente://preferenze:") for r in caplog.records
+    )

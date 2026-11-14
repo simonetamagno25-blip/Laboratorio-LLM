@@ -11,7 +11,7 @@ COPY assistente/ assistente/
 COPY convertitore_mcp/ convertitore_mcp/
 COPY scadenze_api/ scadenze_api/
 COPY tests/ tests/
-COPY pyproject.toml ./
+COPY pyproject.toml preferenze.json ./
 
 # Utente non root; /app gli appartiene così pytest può scrivere .pytest_cache.
 # /app/note è il punto di montaggio del volume delle note: un volume nuovo ne eredita il proprietario.

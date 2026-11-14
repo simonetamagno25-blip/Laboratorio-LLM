@@ -9,6 +9,8 @@ services:
     volumes:
       # Le note restano anche quando il container viene ricreato; `docker compose down -v` le cancella.
       - note:/app/note
+      # Preferenze dell'utente (resource MCP): modificabili sull'host, valgono dalla sessione successiva.
+      - ./preferenze.json:/app/preferenze.json:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

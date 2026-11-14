@@ -101,3 +101,27 @@ def test_max_revisioni_letto():
 def test_max_revisioni_non_valido(valore):
     with pytest.raises(ErroreConfigurazione, match="MAX_REVISIONI"):
         carica_configurazione({**BASE, "MAX_REVISIONI": valore})
+
+
+def test_riassunto_predefinito():
+    c = carica_configurazione(BASE)
+    assert (c.soglia_riassunto, c.messaggi_conservati) == (20, 6)
+
+
+def test_riassunto_letto():
+    c = carica_configurazione({**BASE, "SOGLIA_RIASSUNTO": "10", "MESSAGGI_CONSERVATI": " 4 "})
+    assert (c.soglia_riassunto, c.messaggi_conservati) == (10, 4)
+
+
+@pytest.mark.parametrize("nome", ["SOGLIA_RIASSUNTO", "MESSAGGI_CONSERVATI"])
+@pytest.mark.parametrize("valore", ["0", "-2", "venti"])
+def test_riassunto_non_valido(nome, valore):
+    with pytest.raises(ErroreConfigurazione, match=nome):
+        carica_configurazione({**BASE, nome: valore})
+
+
+@pytest.mark.parametrize("conservati", ["8", "9"])
+def test_messaggi_conservati_minori_della_soglia(conservati):
+    env = {**BASE, "SOGLIA_RIASSUNTO": "8", "MESSAGGI_CONSERVATI": conservati}
+    with pytest.raises(ErroreConfigurazione, match="MESSAGGI_CONSERVATI"):
+        carica_configurazione(env)

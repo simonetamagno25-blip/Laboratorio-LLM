@@ -23,6 +23,8 @@ class Configurazione:
     percorso_db_note: str
     ambito: str
     max_revisioni: int = 2
+    soglia_riassunto: int = 20
+    messaggi_conservati: int = 6
 
 
 def _obbligatoria(env: Mapping[str, str], nome: str) -> str:
@@ -73,6 +75,13 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
 
     ambito = _obbligatoria(env, "AMBITO_AGENTE")
     max_revisioni = _intero_positivo(env, "MAX_REVISIONI", "2")
+    soglia_riassunto = _intero_positivo(env, "SOGLIA_RIASSUNTO", "20")
+    messaggi_conservati = _intero_positivo(env, "MESSAGGI_CONSERVATI", "6")
+    if messaggi_conservati >= soglia_riassunto:
+        raise ErroreConfigurazione(
+            f"MESSAGGI_CONSERVATI ({messaggi_conservati}) deve essere minore di "
+            f"SOGLIA_RIASSUNTO ({soglia_riassunto})"
+        )
 
     return Configurazione(
         base_url,
@@ -84,4 +93,6 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
         percorso_db_note,
         ambito,
         max_revisioni,
+        soglia_riassunto,
+        messaggi_conservati,
     )

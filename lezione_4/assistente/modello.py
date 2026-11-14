@@ -56,6 +56,11 @@ def _strutturato(config: Configurazione, schema: type[BaseModel]) -> Runnable:
     return RunnableLambda(classifica)
 
 
+def crea_riassuntore(config: Configurazione) -> Runnable:
+    # Il riassunto è testo libero: stesso modello, senza strumenti né schema.
+    return _chat(config)
+
+
 def crea_router(config: Configurazione) -> Runnable:
     return _strutturato(config, DecisioneRouter)
 

@@ -61,6 +61,8 @@ class Sessione:
         self._recursion_limit = recursion_limit
         self._config: dict | None = None
         self.cronologia: list[BaseMessage] = []
+        # Riassunto dei turni tolti dalla cronologia (step 3): ripassato a ogni domanda.
+        self.riassunto = ""
 
     def chiedi(self, testo: str) -> str | Conferma:
         # Un thread nuovo per ogni domanda: il checkpointer serve solo alla pausa dentro il
@@ -75,6 +77,7 @@ class Sessione:
                     "messages": self.cronologia + [HumanMessage(testo)],
                     "passaggi_strumenti": 0,
                     "revisioni": 0,
+                    "riassunto": self.riassunto,
                     "eliminazioni_confermate": [],
                 },
                 self._config,
@@ -88,6 +91,7 @@ class Sessione:
         if esito.get("__interrupt__"):
             return Conferma(domanda_conferma(esito["__interrupt__"][0].value))
         self.cronologia = list(esito["messages"])
+        self.riassunto = esito.get("riassunto", self.riassunto)
         return self.cronologia[-1].content or "(risposta vuota)"
 
 

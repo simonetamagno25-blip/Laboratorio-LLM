@@ -81,6 +81,7 @@ def test_avvio_con_tutti_gli_strumenti(monkeypatch, capsys):
     assert ambiti == ["ora e date"]
     assert "router" in grafi[0].get_graph().nodes
     assert "revisore" in grafi[0].get_graph().nodes
+    assert "riassunto" in grafi[0].get_graph().nodes
     assert limiti == [limite_ricorsione(3, 2)]
 
 

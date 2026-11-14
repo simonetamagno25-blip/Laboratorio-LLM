@@ -92,3 +92,10 @@ def test_crea_revisore_output_non_valido_non_solleva(monkeypatch, contenuto, fin
     esito = revisore.invoke([HumanMessage("x")])
     assert esito["parsed"] is None
     assert esito["parsing_error"] is not None
+
+
+def test_crea_riassuntore_e_il_modello_senza_strumenti():
+    from langchain_openai import ChatOpenAI
+
+    riassuntore = modulo_modello.crea_riassuntore(CONFIG)
+    assert isinstance(riassuntore, ChatOpenAI)

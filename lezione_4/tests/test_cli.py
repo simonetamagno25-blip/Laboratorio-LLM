@@ -364,3 +364,24 @@ def test_revisore_nella_sessione_mostra_solo_la_risposta_finale_e_riparte_a_ogni
     # Con max_revisioni=1 la seconda domanda può ancora tornare all'agente: il conteggio riparte.
     assert sessione.chiedi("seconda domanda") == "finale 2"
     assert sum(e_indicazione(m) for m in sessione.cronologia) == 2
+
+
+# --- Riassunto ---
+
+
+def test_la_sessione_conserva_e_ripassa_il_riassunto():
+    riassuntore = ModelloFinto([AIMessage("L'utente si chiama Giulia.")])
+    modello = ModelloFinto([AIMessage("Piacere!"), AIMessage("ok"), AIMessage("Ti chiami Giulia.")])
+    grafo = costruisci_grafo(
+        modello, crea_strumenti(AUTUNNO), "Europe/Rome", 3,
+        riassuntore=riassuntore, soglia_riassunto=4, messaggi_conservati=1,
+    )
+    sessione = Sessione(grafo, limite_ricorsione(3))
+    sessione.chiedi("Mi chiamo Giulia")
+    sessione.chiedi("Che tempo fa?")
+    assert sessione.riassunto == ""
+    # Terzo turno: 5 messaggi > 4, si riassumono i primi due turni.
+    assert sessione.chiedi("Come mi chiamo?") == "Ti chiami Giulia."
+    assert sessione.riassunto == "L'utente si chiama Giulia."
+    assert [m.content for m in sessione.cronologia] == ["Come mi chiamo?", "Ti chiami Giulia."]
+    assert modello.chiamate[2][0].content.endswith("L'utente si chiama Giulia.")

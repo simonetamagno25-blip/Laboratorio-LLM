@@ -20,6 +20,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
 from assistente.note import ArchivioNote
+from assistente.riassunto import prompt_riassunto, punto_di_taglio, testo_da_riassumere
 from assistente.revisore import e_indicazione, indicazione, prompt_revisore, testo_da_revisionare
 from assistente.router import messaggio_rifiuto, prompt_router, testo_da_classificare
 
@@ -43,6 +44,8 @@ class StatoConversazione(TypedDict):
     motivo: NotRequired[str]
     # Risposte rimandate all'agente dal revisore nel turno corrente.
     revisioni: NotRequired[int]
+    # Riassunto dei turni vecchi tolti dalla cronologia: riscritto a ogni compressione.
+    riassunto: NotRequired[str]
 
 
 def prompt_di_sistema(fuso_predefinito: str) -> str:
@@ -101,8 +104,8 @@ def instrada_dopo_revisore(stato: StatoConversazione) -> Literal["agente", "__en
 def limite_ricorsione(max_passaggi: int, max_revisioni: int = 0) -> int:
     # Ogni giro con gli strumenti conta fino a tre passi: agente, conferma, strumenti.
     # Ogni risposta finale conta due passi: agente e revisore (al massimo max_revisioni + 1).
-    # +6: router, rifiuto, e i passi iniziali/finali.
-    return 3 * max_passaggi + 2 * (max_revisioni + 1) + 6
+    # +7: riassunto, router, rifiuto, e i passi iniziali/finali.
+    return 3 * max_passaggi + 2 * (max_revisioni + 1) + 7
 
 
 def numero_nota(args: dict) -> int | None:
@@ -126,6 +129,9 @@ def costruisci_grafo(
     ambito: str = "",
     revisore: Runnable | None = None,
     max_revisioni: int = 2,
+    riassuntore: Runnable | None = None,
+    soglia_riassunto: int = 20,
+    messaggi_conservati: int = 6,
 ) -> CompiledStateGraph:
     per_nome = {s.name: s for s in strumenti}
     if router is not None and not ambito.strip():
@@ -191,6 +197,40 @@ def costruisci_grafo(
         log.info("rifiuto: domanda fuori ambito, agente non eseguito")
         return {"messages": [AIMessage(messaggio_rifiuto(ambito))]}
 
+    def nodo_riassunto(stato: StatoConversazione) -> dict:
+        messaggi = stato["messages"]
+        if len(messaggi) <= soglia_riassunto:
+            log.debug(
+                "riassunto: %d messaggi, soglia %d: nessun riassunto", len(messaggi), soglia_riassunto
+            )
+            return {}
+        taglio = punto_di_taglio(messaggi, messaggi_conservati)
+        if taglio == 0:
+            log.info("riassunto: %d messaggi ma nessun turno da comprimere", len(messaggi))
+            return {}
+        vecchi = messaggi[:taglio]
+        try:
+            risposta = riassuntore.invoke(
+                [
+                    SystemMessage(prompt_riassunto()),
+                    HumanMessage(testo_da_riassumere(stato.get("riassunto", ""), vecchi)),
+                ]
+            )
+        except Exception as errore:
+            # Il riassunto è un'ottimizzazione: se fallisce il turno prosegue senza comprimere.
+            log.warning("riassunto: non riuscito (%s), cronologia invariata", errore)
+            return {}
+        log.info(
+            "riassunto: %d messaggi prima, %d dopo (%d riassunti)",
+            len(messaggi),
+            len(messaggi) - taglio,
+            taglio,
+        )
+        return {
+            "riassunto": risposta.text.strip(),
+            "messages": [RemoveMessage(id=m.id) for m in vecchi],
+        }
+
     def nodo_revisore(stato: StatoConversazione) -> dict:
         esito = revisore.invoke(
             [
@@ -227,7 +267,11 @@ def costruisci_grafo(
 
     def nodo_agente(stato: StatoConversazione) -> dict:
         log.info("agente: chiamata al modello")
-        messaggi = [SystemMessage(prompt_di_sistema(fuso_predefinito))] + stato["messages"]
+        sistema = prompt_di_sistema(fuso_predefinito)
+        if stato.get("riassunto"):
+            # Gemma accetta un solo messaggio di sistema: il riassunto va in coda al prompt.
+            sistema += "\n\nRiassunto della conversazione precedente: " + stato["riassunto"]
+        messaggi = [SystemMessage(sistema)] + stato["messages"]
         return {"messages": [modello.invoke(messaggi)]}
 
     def nodo_strumenti(stato: StatoConversazione) -> dict:
@@ -289,16 +333,21 @@ def costruisci_grafo(
     grafo.add_node("strumenti", nodo_strumenti)
     grafo.add_node("conferma_eliminazione", nodo_conferma_eliminazione)
     grafo.add_node("limite_raggiunto", nodo_limite_raggiunto)
+    inizio = START
+    if riassuntore is not None:
+        grafo.add_node("riassunto", nodo_riassunto)
+        grafo.add_edge(START, "riassunto")
+        inizio = "riassunto"
     if router is not None:
         grafo.add_node("router", nodo_router)
         grafo.add_node("rifiuto", nodo_rifiuto)
-        grafo.add_edge(START, "router")
+        grafo.add_edge(inizio, "router")
         grafo.add_conditional_edges(
             "router", instrada_dopo_router, {"agente": "agente", "rifiuto": "rifiuto"}
         )
         grafo.add_edge("rifiuto", END)
     else:
-        grafo.add_edge(START, "agente")
+        grafo.add_edge(inizio, "agente")
     grafo.add_conditional_edges(
         "agente",
         instrada,

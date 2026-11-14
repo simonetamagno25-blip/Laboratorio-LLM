@@ -770,3 +770,121 @@ def test_limite_ricorsione_basta_con_revisioni_e_strumenti(archivio):
     stato = chiedi(grafo, "elimina", max_passaggi=max_passaggi, max_revisioni=max_revisioni)
     assert stato["messages"][-1].content == f"risposta {max_revisioni}"
     assert len(revisore.chiamate) == max_revisioni + 1
+
+
+# --- Riassunto ---
+
+
+def storia(turni):
+    """Cronologia di `turni` turni semplici (2 messaggi ciascuno)."""
+    messaggi = []
+    for i in range(turni):
+        messaggi += [HumanMessage(f"domanda {i}"), AIMessage(f"risposta {i}")]
+    return messaggi
+
+
+def crea_con_riassunto(riassunti, risposte, *, soglia=6, conservati=2, archivio=None):
+    riassuntore = ModelloFinto([AIMessage(r) if isinstance(r, str) else r for r in riassunti])
+    modello = ModelloFinto(risposte)
+    grafo = costruisci_grafo(
+        modello, crea_strumenti(AUTUNNO, archivio=archivio), "Europe/Rome", 3, archivio=archivio,
+        riassuntore=riassuntore, soglia_riassunto=soglia, messaggi_conservati=conservati,
+    )
+    return riassuntore, modello, grafo
+
+
+def turno_con(grafo, cronologia, testo, riassunto=""):
+    return grafo.invoke(
+        {
+            "messages": cronologia + [HumanMessage(testo)],
+            "passaggi_strumenti": 0,
+            "riassunto": riassunto,
+        },
+        {"recursion_limit": limite_ricorsione(3), "configurable": {"thread_id": "t"}},
+    )
+
+
+def test_sotto_la_soglia_il_riassunto_non_chiama_il_modello():
+    riassuntore, modello, grafo = crea_con_riassunto([], [AIMessage("ok")], soglia=6)
+    stato = turno_con(grafo, storia(2), "domanda nuova")  # 5 messaggi <= 6
+    assert riassuntore.chiamate == []
+    assert len(stato["messages"]) == 6
+    assert stato.get("riassunto", "") == ""
+
+
+def test_sopra_la_soglia_comprime_e_conserva_gli_ultimi(caplog):
+    caplog.set_level(logging.INFO)
+    riassuntore, modello, grafo = crea_con_riassunto(
+        ["L'utente si chiama Giulia."], [AIMessage("Ti chiami Giulia.")], soglia=6, conservati=2
+    )
+    cronologia = [HumanMessage("Mi chiamo Giulia"), AIMessage("Piacere!")] + storia(3)
+    stato = turno_con(grafo, cronologia, "Come mi chiamo?")  # 9 messaggi > 6
+    assert len(riassuntore.chiamate) == 1
+    assert stato["riassunto"] == "L'utente si chiama Giulia."
+    # Conservati: l'ultimo turno completo e la domanda corrente, poi la risposta.
+    assert [m.content for m in stato["messages"]] == [
+        "domanda 2", "risposta 2", "Come mi chiamo?", "Ti chiami Giulia."
+    ]
+    # Il riassunto arriva all'agente nel prompt di sistema.
+    sistema = modello.chiamate[0][0]
+    assert isinstance(sistema, SystemMessage)
+    assert sistema.content.endswith("L'utente si chiama Giulia.")
+    assert "riassunto: 9 messaggi prima, 3 dopo (6 riassunti)" in messaggi_log(caplog)
+    # Il testo da riassumere contiene il primo turno.
+    assert "Utente: Mi chiamo Giulia" in riassuntore.chiamate[0][-1].content
+
+
+def test_il_riassunto_viene_aggiornato_non_accumulato():
+    riassuntore, _, grafo = crea_con_riassunto(
+        ["riassunto nuovo"], [AIMessage("ok")], soglia=4, conservati=2
+    )
+    stato = turno_con(grafo, storia(3), "altra domanda", riassunto="riassunto vecchio")
+    assert stato["riassunto"] == "riassunto nuovo"
+    testo = riassuntore.chiamate[0][-1].content
+    assert testo.startswith("Riassunto precedente:\nriassunto vecchio")
+
+
+def test_il_riassunto_non_separa_strumenti_e_risultati():
+    cronologia = []
+    for i in range(3):
+        cronologia += [
+            HumanMessage(f"ora {i}"),
+            chiamata_strumento("Europe/Rome", id=f"c{i}"),
+            ToolMessage("17:05", tool_call_id=f"c{i}", name="ora_corrente"),
+            AIMessage(f"Sono le 17:0{i}."),
+        ]
+    _, _, grafo = crea_con_riassunto(["r"], [AIMessage("ok")], soglia=6, conservati=3)
+    stato = turno_con(grafo, cronologia, "ancora")
+    messaggi = stato["messages"]
+    assert isinstance(messaggi[0], HumanMessage)
+    richieste = {c["id"] for m in messaggi if isinstance(m, AIMessage) for c in m.tool_calls}
+    risposte = {m.tool_call_id for m in messaggi if isinstance(m, ToolMessage)}
+    assert richieste == risposte
+
+
+def test_errore_del_riassunto_lascia_la_cronologia_e_completa_il_turno(caplog):
+    caplog.set_level(logging.INFO)
+    riassuntore, _, grafo = crea_con_riassunto(
+        [RuntimeError("modello giù")], [AIMessage("ok")], soglia=4, conservati=2
+    )
+    cronologia = storia(3)
+    stato = turno_con(grafo, cronologia, "domanda")
+    assert len(stato["messages"]) == len(cronologia) + 2
+    assert stato["messages"][-1].content == "ok"
+    avvisi = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(a.startswith("riassunto: non riuscito (modello giù)") for a in avvisi), avvisi
+
+
+def test_conferma_delle_note_non_riesegue_il_riassunto(archivio):
+    archivio.aggiungi("sensore SEN-004 da ricalibrare")
+    riassuntore, _, grafo = crea_con_riassunto(
+        ["r"], [elimina(1), AIMessage("Eliminata.")], soglia=4, conservati=2, archivio=archivio
+    )
+    esito = turno_con(grafo, storia(3), "elimina la nota 1")
+    assert esito.get("__interrupt__")
+    stato = grafo.invoke(
+        Command(resume=True),
+        {"recursion_limit": limite_ricorsione(3), "configurable": {"thread_id": "t"}},
+    )
+    assert stato["messages"][-1].content == "Eliminata."
+    assert len(riassuntore.chiamate) == 1

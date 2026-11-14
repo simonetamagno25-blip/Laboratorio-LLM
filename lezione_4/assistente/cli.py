@@ -2,11 +2,10 @@
 
 import sys
 from dataclasses import dataclass
-from uuid import uuid4
 
 from langchain_core.messages import BaseMessage, HumanMessage
-from langgraph.types import Command
 
+from assistente.agente import Agente, RichiestaConferma, Risposta
 from assistente.client_mcp import ErroreMCP
 from assistente.comandi import (
     ErroreComando,
@@ -25,15 +24,11 @@ class Conferma:
     domanda: str
 
 
-def domanda_conferma(dati: dict) -> str:
-    return f'Eliminare la nota {dati["numero"]} ({dati["creata"]}): "{dati["testo"]}"? [sì/no]'
-
-
 def e_un_si(risposta: str) -> bool:
     return risposta.strip().casefold() in {"sì", "si", "s"}
 
 
-ATTESA = "(attendi: il modello sta rispondendo...)"
+ATTESA ="(attendi: il modello sta rispondendo...)"
 
 
 def scarta_input_anticipato(ingresso=None) -> None:
@@ -64,10 +59,14 @@ def scarta_input_anticipato(ingresso=None) -> None:
 
 
 class Sessione:
+    """Sessione locale: tiene cronologia e riassunto e usa l'Agente nello stesso processo.
+
+    Ha la stessa interfaccia di SessioneRemota (client dell'API dell'agente).
+    """
+
     def __init__(self, grafo, recursion_limit: int):
-        self._grafo = grafo
-        self._recursion_limit = recursion_limit
-        self._config: dict | None = None
+        self._agente = Agente(grafo, recursion_limit)
+        self._id_conferma: str | None = None
         self.cronologia: list[BaseMessage] = []
         # Riassunto dei turni tolti dalla cronologia (step 3): ripassato a ogni domanda.
         self.riassunto = ""
@@ -77,34 +76,19 @@ class Sessione:
 
     def chiedi_messaggi(self, messaggi: list[BaseMessage]) -> str | Conferma:
         """Come chiedi, con i messaggi già pronti (per esempio quelli di un prompt MCP)."""
-        # Un thread nuovo per ogni domanda: il checkpointer serve solo alla pausa dentro il
-        # turno, la cronologia resta in questa lista e si aggiorna solo se il turno finisce bene.
-        self._config = {
-            "recursion_limit": self._recursion_limit,
-            "configurable": {"thread_id": uuid4().hex},
-        }
-        return self._esito(
-            self._grafo.invoke(
-                {
-                    "messages": self.cronologia + list(messaggi),
-                    "passaggi_strumenti": 0,
-                    "revisioni": 0,
-                    "riassunto": self.riassunto,
-                    "eliminazioni_confermate": [],
-                },
-                self._config,
-            )
-        )
+        # La cronologia si aggiorna solo se il turno finisce bene.
+        return self._esito(self._agente.turno(messaggi, self.cronologia, self.riassunto))
 
     def conferma(self, si: bool) -> str | Conferma:
-        return self._esito(self._grafo.invoke(Command(resume=si), self._config))
+        return self._esito(self._agente.conferma(self._id_conferma, si))
 
-    def _esito(self, esito: dict) -> str | Conferma:
-        if esito.get("__interrupt__"):
-            return Conferma(domanda_conferma(esito["__interrupt__"][0].value))
-        self.cronologia = list(esito["messages"])
-        self.riassunto = esito.get("riassunto", self.riassunto)
-        return self.cronologia[-1].content or "(risposta vuota)"
+    def _esito(self, esito: Risposta | RichiestaConferma) -> str | Conferma:
+        if isinstance(esito, RichiestaConferma):
+            self._id_conferma = esito.id_conferma
+            return Conferma(esito.domanda)
+        self.cronologia = esito.cronologia
+        self.riassunto = esito.riassunto
+        return esito.testo or "(risposta vuota)"
 
 
 def _comando_prompt(riga: str, prompt) -> list[BaseMessage]:

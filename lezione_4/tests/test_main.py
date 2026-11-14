@@ -9,6 +9,7 @@ ENV = {
     "LMSTUDIO_BASE_URL": "http://localhost:1234/v1",
     "LMSTUDIO_MODEL": "m",
     "SCADENZE_API_URL": "http://localhost:8000",
+    "AMBITO_AGENTE": "ora e date",
 }
 
 

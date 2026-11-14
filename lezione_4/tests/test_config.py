@@ -6,6 +6,7 @@ BASE = {
     "LMSTUDIO_BASE_URL": "http://localhost:1234/v1",
     "LMSTUDIO_MODEL": "google/gemma-4-e2b",
     "SCADENZE_API_URL": "http://localhost:8000",
+    "AMBITO_AGENTE": "ora e date",
 }
 
 
@@ -16,9 +17,12 @@ def test_valori_predefiniti():
     assert c.fuso_predefinito == "Europe/Rome"
     assert c.max_passaggi_strumenti == 3
     assert c.log_level == "INFO"
+    assert c.ambito == "ora e date"
 
 
-@pytest.mark.parametrize("mancante", ["LMSTUDIO_BASE_URL", "LMSTUDIO_MODEL", "SCADENZE_API_URL"])
+@pytest.mark.parametrize(
+    "mancante", ["LMSTUDIO_BASE_URL", "LMSTUDIO_MODEL", "SCADENZE_API_URL", "AMBITO_AGENTE"]
+)
 def test_variabile_obbligatoria_mancante(mancante):
     env = {k: v for k, v in BASE.items() if k != mancante}
     with pytest.raises(ErroreConfigurazione, match=mancante):
@@ -78,3 +82,8 @@ def test_percorso_note_predefinito(valore):
 def test_percorso_note_personalizzato():
     env = {**BASE, "PERCORSO_DB_NOTE": " C:/x/n.sqlite3 "}
     assert carica_configurazione(env).percorso_db_note == "C:/x/n.sqlite3"
+
+
+def test_ambito_vuoto():
+    with pytest.raises(ErroreConfigurazione, match="AMBITO_AGENTE"):
+        carica_configurazione({**BASE, "AMBITO_AGENTE": "  "})

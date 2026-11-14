@@ -34,6 +34,7 @@ def test_crea_modello_e_un_runnable():
         "INFO",
         "http://localhost:8000",
         "note.sqlite3",
+        "ora e date",
     )
     assert isinstance(crea_modello(config, crea_strumenti()), Runnable)
 

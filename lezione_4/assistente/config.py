@@ -21,6 +21,7 @@ class Configurazione:
     log_level: str
     scadenze_api_url: str
     percorso_db_note: str
+    ambito: str
 
 
 def _obbligatoria(env: Mapping[str, str], nome: str) -> str:
@@ -68,6 +69,15 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
 
     percorso_db_note = env.get("PERCORSO_DB_NOTE", "").strip() or "note.sqlite3"
 
+    ambito = _obbligatoria(env, "AMBITO_AGENTE")
+
     return Configurazione(
-        base_url, modello, fuso, max_passaggi, log_level, scadenze_api_url, percorso_db_note
+        base_url,
+        modello,
+        fuso,
+        max_passaggi,
+        log_level,
+        scadenze_api_url,
+        percorso_db_note,
+        ambito,
     )

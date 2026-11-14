@@ -20,7 +20,9 @@ Per il modello sono tutti normali strumenti: cambia solo dove viene eseguito il 
 
 Prima dell'agente un router classifica ogni domanda come `conversazione` o `fuori_ambito`
 rispetto all'ambito scritto in `AMBITO_AGENTE`: le domande fuori ambito ricevono un rifiuto
-senza che l'agente venga eseguito.
+senza che l'agente venga eseguito. Dopo la risposta finale dell'agente un revisore controlla che
+risponda a tutte le parti della domanda: se non è coerente la rimanda all'agente con il motivo, al
+massimo `MAX_REVISIONI` volte.
 
 I comandi sono PowerShell (Windows) e vanno lanciati dalla cartella `lezione_4/`.
 
@@ -49,6 +51,7 @@ Il file `.env` non va in Git. Le variabili sono:
 | `SCADENZE_API_PORTA` | no | `8000` (porta del servizio `scadenze_api`) |
 | `SCADENZE_API_HOST` | no | `127.0.0.1` (solo questo computer); in Docker `0.0.0.0` (da `docker-compose.yml`) |
 | `PERCORSO_DB_NOTE` | no | `note.sqlite3`; in Docker `/app/note/note.sqlite3`, sul volume `note` (da `docker-compose.yml`) |
+| `MAX_REVISIONI` | no | `2` (quante volte il revisore può rimandare una risposta all'agente in un turno) |
 | `AMBITO_AGENTE` | sì | il testo di `.env.example` (strumenti del laboratorio, temi del corso, saluti) |
 
 `AMBITO_AGENTE` descrive in una riga, senza virgolette, di che cosa si occupa l'assistente. Il router
@@ -164,13 +167,30 @@ Prova reale con LM Studio, attivata esplicitamente (richiede il server e `.env` 
 ```
 
 Solo le prove reali del router (domanda in ambito con strumento, fuori ambito, tema del corso,
-domanda di seguito), 4 test, circa 6 minuti:
+domanda di seguito, seguito di una domanda fuori ambito), 5 test, circa 8 minuti:
 
 ```powershell
 .\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -k router -v -s
 ```
 
-Verificate con `google/gemma-4-e2b`: 4 superati su 4.
+Verificate con `google/gemma-4-e2b`: 5 superati su 5.
+
+Solo le prove reali del revisore, 2 test, circa 6 minuti:
+
+```powershell
+.\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -k revisore -v -s
+```
+
+- `test_revisore_risposta_coerente`: «Che ore sono adesso a Tokyo?» è approvata al primo passaggio
+  (`revisore: coerente=sì ... -> fine`).
+- `test_revisore_risposta_parziale_corretta`: la prima risposta dell'agente è forzata parziale
+  (solo l'ora per «Che ore sono a Tokyo e quanto fa 17 * 23?»); il revisore reale la rifiuta con il
+  motivo (`coerente=no motivo=La risposta ignora la richiesta di calcolare il prodotto ... -> agente
+  (revisione 1 di 2)`) e l'agente reale risponde con 391.
+
+Verificate con `google/gemma-4-e2b`: 2 superati su 2. Osservazione: dopo la prima risposta forzata il
+modello calcola 17 * 23 a mente invece di chiamare `calcola`; con «17 per 23» lo aveva letto come una
+divisione, perciò la prova usa «17 * 23».
 
 La prova reale completa fa anche una domanda per ogni strumento (ora, calcolo, conversione, giorni lavorativi),
 una conversione impossibile, cinque domande sul catalogo (ricerca, dettaglio, ricerca seguita da
@@ -318,7 +338,9 @@ flowchart TD
     router -->|conversazione| agente
     router -->|fuori_ambito| rifiuto
     rifiuto --> END([END])
-    agente -->|nessuna chiamata a strumento| END
+    agente -->|nessuna chiamata a strumento| revisore
+    revisore -->|coerente, o limite di revisioni| END
+    revisore -->|non coerente + motivo| agente
     agente -->|chiamate e passaggi sotto il limite| strumenti
     agente -->|chiamata a elimina_nota, sotto il limite| conferma_eliminazione
     agente -->|chiamate e limite raggiunto| limite_raggiunto
@@ -329,9 +351,10 @@ flowchart TD
 
 Lo stato ha `messages` (la cronologia), `passaggi_strumenti` (il contatore, azzerato a ogni domanda),
 `eliminazioni_confermate` (le chiamate a `elimina_nota` confermate dall'utente), `categoria` e
-`motivo` (la decisione del router per la domanda corrente). Il limite è `MAX_PASSAGGI_STRUMENTI`.
+`motivo` (la decisione del router per la domanda corrente) e `revisioni` (le risposte rimandate
+all'agente dal revisore nel turno). I limiti sono `MAX_PASSAGGI_STRUMENTI` e `MAX_REVISIONI`.
 Il codice è in `assistente/grafo.py`; prompt, schema della decisione e messaggio di rifiuto sono in
-`assistente/router.py`.
+`assistente/router.py`; quelli del revisore in `assistente/revisore.py`.
 
 `router` chiama lo stesso modello con output strutturato (`json_schema`): riceve l'ambito, gli ultimi
 turni della conversazione (solo domande e risposte finali, senza chiamate agli strumenti) e la domanda
@@ -341,6 +364,16 @@ per lunghezza) la domanda passa comunque all'agente (fail-open), con un `WARNING
 sono intercettati in `crea_router` (`assistente/modello.py`). LM Studio irraggiungibile o un errore del
 server invece non sono fail-open: il turno fallisce con il messaggio di errore e la cronologia resta
 intatta. `rifiuto` risponde con un testo fisso che riporta l'ambito, senza chiamare il modello.
+
+`revisore` chiama lo stesso modello con output strutturato (`coerente` sì/no e `motivo`): riceve gli
+ultimi turni, la domanda corrente e la risposta proposta, senza le chiamate agli strumenti. Non
+verifica i fatti, solo che ogni parte della domanda abbia una risposta in tema. Se la risposta non è
+coerente aggiunge alla cronologia un'indicazione per l'agente (un messaggio con `name="revisore"` che
+inizia con «Indicazione del revisore:») e torna ad `agente`. Dopo `MAX_REVISIONI` rimandi restituisce
+l'ultima risposta e lo segnala nei log. Un output non valido del revisore approva la risposta
+(fail-open). Il rifiuto del router e il messaggio di limite degli strumenti non passano dal revisore.
+Nel terminale compare solo la risposta finale; bozze e indicazioni restano nella cronologia, ma il
+router e il revisore non le considerano come turni della conversazione.
 
 `conferma_eliminazione` legge la nota dall'archivio e, se esiste, ferma il grafo con `interrupt()`;
 il terminale fa la domanda e riprende il grafo con `Command(resume=True/False)`. `strumenti` esegue
@@ -393,6 +426,16 @@ Il comportamento dipende dal modello: solo la prova reale lo conferma.
 - `rifiuto: domanda fuori ambito, agente non eseguito`;
 - `WARNING ... router: output non valido (...), la domanda passa all'agente`: il modello non ha
   restituito una decisione valida e la domanda è trattata come in ambito.
+
+**Righe del revisore nei log** (con `LOG_LEVEL=INFO`):
+- `revisore: coerente=sì motivo=<motivo> -> fine`: risposta approvata;
+- `revisore: coerente=no motivo=<motivo> -> agente (revisione <n> di <max>)`: risposta rimandata
+  all'agente con il motivo;
+- `WARNING ... revisore: limite di <max> revisioni raggiunto, si restituisce l'ultima risposta`;
+- `WARNING ... revisore: output non valido (...), la risposta è approvata`.
+
+**Risposte lente:** ogni domanda fa almeno tre chiamate al modello (router, agente, revisore) e ogni
+rimando del revisore ne aggiunge due. Con `MAX_REVISIONI=1` il caso peggiore si accorcia.
 
 **Una domanda valida viene rifiutata:** leggere il `motivo` nella riga `router:` e allargare
 `AMBITO_AGENTE` nel `.env` con l'argomento mancante, poi ricaricare `.env` e riavviare l'assistente.

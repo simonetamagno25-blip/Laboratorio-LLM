@@ -25,16 +25,16 @@ dell'eliminazione delle note, server MCP `convertitore_mcp` via stdio, servizio 
 - **Evidenza minima:** domanda fuori ambito rifiutata senza passare dall'agente
 
 ## Step 2 · Revisore: la risposta è coerente con la domanda? (Intermedio)
-- [ ] Specifica e piano approvati
-- [ ] Nodo revisore con domanda dell'utente e risposta proposta
-- [ ] Output strutturato: `coerente` (sì/no) e `motivo`
-- [ ] Se non coerente, il motivo entra nella cronologia come indicazione per l'agente
-- [ ] Limite di revisioni nello stato; al limite si restituisce l'ultima risposta, segnalato nei log
+- [x] Specifica e piano approvati
+- [x] Nodo revisore con domanda dell'utente e risposta proposta
+- [x] Output strutturato: `coerente` (sì/no) e `motivo`
+- [x] Se non coerente, il motivo entra nella cronologia come indicazione per l'agente
+- [x] Limite di revisioni nello stato; al limite si restituisce l'ultima risposta, segnalato nei log
 - Evidenze
-  - [ ] Domanda in due parti con risposta parziale: rifiuto motivato e nuova risposta completa
-  - [ ] Risposta coerente approvata al primo passaggio
-  - [ ] Limite rispettato con un revisore simulato che rifiuta sempre
-- [ ] Prova reale con LM Studio · [ ] README · [ ] Commit
+  - [x] Domanda in due parti con risposta parziale: rifiuto motivato e nuova risposta completa
+  - [x] Risposta coerente approvata al primo passaggio
+  - [x] Limite rispettato con un revisore simulato che rifiuta sempre
+- [x] Prova reale con LM Studio · [x] README · [x] Commit
 - **Evidenza minima:** risposta incompleta corretta dopo la revisione, entro il limite
 
 ## Step 3 · Riassunto della cronologia (Avanzato)

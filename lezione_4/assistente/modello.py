@@ -1,9 +1,10 @@
 """Collegamento al modello servito da LM Studio (API compatibile con OpenAI)."""
 
 import openai
-from langchain_core.runnables import Runnable
+from langchain_core.runnables import Runnable, RunnableConfig, RunnableLambda
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
+from pydantic import ValidationError
 
 from assistente.config import Configurazione
 from assistente.router import DecisioneRouter
@@ -25,15 +26,33 @@ def crea_modello(config: Configurazione, strumenti: list[BaseTool]) -> Runnable:
     return _chat(config).bind_tools(strumenti)
 
 
+# Guasti di formato della risposta del router. Con json_schema la libreria fa validare lo schema
+# all'SDK openai, che solleva queste eccezioni invece di restituire parsed=None.
+ERRORI_FORMATO_ROUTER = (
+    ValidationError,
+    openai.LengthFinishReasonError,
+    openai.ContentFilterFinishReasonError,
+)
+
+
 def crea_router(config: Configurazione) -> Runnable:
     """Router con output strutturato: LM Studio impone lo schema JSON durante la generazione.
 
-    Con include_raw=True un output non valido non solleva eccezioni: restituisce
+    Un output non valido non solleva eccezioni: restituisce
     {"raw": ..., "parsed": None, "parsing_error": ...} e il grafo decide cosa fare.
+    Gli errori di connessione e di stato del server invece si propagano.
     """
-    return _chat(config).with_structured_output(
+    strutturato = _chat(config).with_structured_output(
         DecisioneRouter, method="json_schema", include_raw=True
     )
+
+    def classifica(messaggi, config: RunnableConfig) -> dict:
+        try:
+            return strutturato.invoke(messaggi, config)
+        except ERRORI_FORMATO_ROUTER as exc:
+            return {"raw": None, "parsed": None, "parsing_error": exc}
+
+    return RunnableLambda(classifica)
 
 
 def descrivi_errore(exc: Exception, base_url: str) -> str:

@@ -519,5 +519,118 @@ def test_router_senza_ambito_rifiutato():
         )
 
 
-def test_limite_ricorsione():
-    assert limite_ricorsione(3) == 15
+def test_limite_ricorsione_basta_nel_caso_peggiore(archivio):
+    # Caso peggiore: router davanti e ogni passaggio passa anche da conferma_eliminazione
+    # (note inesistenti, quindi nessuna pausa). Deve finire su limite_raggiunto,
+    # non con GraphRecursionError.
+    max_passaggi = 3
+    risposte = [elimina(99, id=f"call_{i}") for i in range(max_passaggi + 1)]
+    modello = ModelloFinto(risposte)
+    grafo = costruisci_grafo(
+        modello, crea_strumenti(AUTUNNO, archivio=archivio), "Europe/Rome", max_passaggi,
+        archivio=archivio, router=RouterFinto([decisione("conversazione")]), ambito=AMBITO,
+    )
+    stato = grafo.invoke(
+        {"messages": [HumanMessage("elimina")], "passaggi_strumenti": 0},
+        {"recursion_limit": limite_ricorsione(max_passaggi), "configurable": {"thread_id": "t"}},
+    )
+    assert stato["messages"][-1].content == MESSAGGIO_LIMITE
+    assert len(modello.chiamate) == max_passaggi + 1
+
+
+# Contratto con la libreria: il vero crea_router (ChatOpenAI.with_structured_output con
+# json_schema) davanti a risposte malformate del server, simulate con httpx.MockTransport.
+# Nessun modello attivo: serve a verificare che il fail-open copra anche i casi in cui la
+# libreria solleva un'eccezione invece di restituire parsed=None.
+
+import json
+
+import httpx
+import openai
+from langchain_openai import ChatOpenAI
+
+from assistente import modello as modulo_modello
+from assistente.config import Configurazione
+
+
+def risposta_del_server(contenuto, finish_reason="stop"):
+    def gestore(request):
+        corpo = {
+            "id": "x", "object": "chat.completion", "created": 0, "model": "m",
+            "choices": [{
+                "index": 0, "finish_reason": finish_reason,
+                "message": {"role": "assistant", "content": contenuto},
+            }],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+        }
+        return httpx.Response(200, json=corpo)
+
+    return gestore
+
+
+def router_reale(monkeypatch, gestore):
+    """Il vero crea_router, con un ChatOpenAI che parla con un server finto."""
+    chat = ChatOpenAI(
+        base_url="http://server-finto/v1", model="m", api_key="k", max_retries=0,
+        http_client=httpx.Client(transport=httpx.MockTransport(gestore)),
+    )
+    monkeypatch.setattr(modulo_modello, "_chat", lambda config: chat)
+    config = Configurazione(
+        "http://server-finto/v1", "m", "Europe/Rome", 3, "INFO",
+        "http://localhost:8000", "note.sqlite3", AMBITO,
+    )
+    return modulo_modello.crea_router(config)
+
+
+@pytest.mark.parametrize(
+    "contenuto, finish_reason",
+    [
+        pytest.param(json.dumps({"categoria": "altro", "motivo": "x"}), "stop", id="fuori_schema"),
+        pytest.param('{"categoria": "conv', "stop", id="json_troncato"),
+        pytest.param("", "stop", id="vuoto"),
+        pytest.param(
+            json.dumps({"categoria": "fuori_ambito", "motivo": "x"}), "length", id="troncato_length"
+        ),
+    ],
+)
+def test_router_reale_output_non_valido_passa_all_agente(
+    monkeypatch, caplog, contenuto, finish_reason
+):
+    caplog.set_level(logging.INFO)
+    router = router_reale(monkeypatch, risposta_del_server(contenuto, finish_reason))
+    modello = ModelloFinto([AIMessage("Ciao!")])
+    grafo = costruisci_grafo(
+        modello, crea_strumenti(AUTUNNO), "Europe/Rome", 3, router=router, ambito=AMBITO
+    )
+    stato = invoca(grafo, "Ciao")
+    assert stato["messages"][-1].content == "Ciao!"
+    assert stato["categoria"] == "conversazione"
+    avvisi = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("output non valido" in a for a in avvisi), avvisi
+
+
+def test_router_reale_output_valido(monkeypatch):
+    router = router_reale(
+        monkeypatch, risposta_del_server(json.dumps({"categoria": "fuori_ambito", "motivo": "ricetta"}))
+    )
+    modello = ModelloFinto([])
+    grafo = costruisci_grafo(
+        modello, crea_strumenti(AUTUNNO), "Europe/Rome", 3, router=router, ambito=AMBITO
+    )
+    stato = invoca(grafo, "Dammi la ricetta della carbonara")
+    assert stato["categoria"] == "fuori_ambito"
+    assert stato["messages"][-1].content == messaggio_rifiuto(AMBITO)
+    assert modello.chiamate == []
+
+
+def test_router_reale_errore_di_connessione_non_e_fail_open(monkeypatch):
+    # Solo i guasti di formato sono fail-open: LM Studio irraggiungibile resta un errore.
+    def rifiuta(request):
+        raise httpx.ConnectError("connessione rifiutata", request=request)
+
+    grafo = costruisci_grafo(
+        ModelloFinto([]), crea_strumenti(AUTUNNO), "Europe/Rome", 3,
+        router=router_reale(monkeypatch, rifiuta), ambito=AMBITO,
+    )
+    with pytest.raises(openai.APIConnectionError):
+        invoca(grafo, "Ciao")

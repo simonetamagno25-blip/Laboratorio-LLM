@@ -336,8 +336,11 @@ Il codice è in `assistente/grafo.py`; prompt, schema della decisione e messaggi
 `router` chiama lo stesso modello con output strutturato (`json_schema`): riceve l'ambito, gli ultimi
 turni della conversazione (solo domande e risposte finali, senza chiamate agli strumenti) e la domanda
 corrente, e restituisce `categoria` e `motivo`. Non sceglie gli strumenti: quello resta compito di
-`agente`. Se l'output non è valido la domanda passa comunque all'agente (fail-open), con un `WARNING`
-nei log. `rifiuto` risponde con un testo fisso che riporta l'ambito, senza chiamare il modello.
+`agente`. Se l'output non è valido (vuoto, JSON troncato, categoria fuori schema, risposta interrotta
+per lunghezza) la domanda passa comunque all'agente (fail-open), con un `WARNING` nei log; questi casi
+sono intercettati in `crea_router` (`assistente/modello.py`). LM Studio irraggiungibile o un errore del
+server invece non sono fail-open: il turno fallisce con il messaggio di errore e la cronologia resta
+intatta. `rifiuto` risponde con un testo fisso che riporta l'ambito, senza chiamare il modello.
 
 `conferma_eliminazione` legge la nota dall'archivio e, se esiste, ferma il grafo con `interrupt()`;
 il terminale fa la domanda e riprende il grafo con `Command(resume=True/False)`. `strumenti` esegue

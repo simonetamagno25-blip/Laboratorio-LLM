@@ -19,7 +19,7 @@ def indice_domanda_corrente(messaggi: list[AnyMessage]) -> int:
     raise ValueError("nella cronologia non c'è nessuna domanda dell'utente")
 
 
-def _e_bozza_rifiutata(messaggi: list[AnyMessage], i: int) -> bool:
+def e_bozza_rifiutata(messaggi: list[AnyMessage], i: int) -> bool:
     return i + 1 < len(messaggi) and e_indicazione(messaggi[i + 1])
 
 
@@ -45,7 +45,7 @@ def righe_precedenti(messaggi: list[AnyMessage], turni: int, massimo: int) -> li
             isinstance(m, AIMessage)
             and not m.tool_calls
             and m.text.strip()
-            and not _e_bozza_rifiutata(messaggi, i)
+            and not e_bozza_rifiutata(messaggi, i)
         ):
             righe.append(_riga(m, massimo))
     return righe

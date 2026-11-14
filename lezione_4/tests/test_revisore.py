@@ -74,3 +74,8 @@ def test_indicazione():
     assert e_indicazione(messaggio)
     assert not e_indicazione(HumanMessage("ciao"))
     assert not e_indicazione(AIMessage("ciao"))
+
+
+def test_indicazione_ricorda_gli_strumenti():
+    # Prova reale: dopo il rifiuto l'agente rispondeva a mente invece di chiamare calcola.
+    assert "usa gli strumenti" in indicazione("manca il calcolo").content

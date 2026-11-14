@@ -65,6 +65,7 @@ def indicazione(motivo: str) -> HumanMessage:
     """Messaggio con cui il revisore rimanda la risposta all'agente."""
     return HumanMessage(
         "Indicazione del revisore: la risposta precedente non risponde del tutto alla domanda "
-        f"({motivo}). Rispondi di nuovo alla domanda dell'utente tenendone conto.",
+        f"({motivo}). Rispondi di nuovo a tutta la domanda dell'utente tenendone conto e usa gli "
+        "strumenti per le parti che li richiedono, come per qualsiasi domanda.",
         name=NOME_REVISORE,
     )

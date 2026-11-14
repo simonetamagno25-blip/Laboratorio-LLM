@@ -547,33 +547,15 @@ import json
 
 import httpx
 import openai
-from langchain_openai import ChatOpenAI
 
 from assistente import modello as modulo_modello
 from assistente.config import Configurazione
-
-
-def risposta_del_server(contenuto, finish_reason="stop"):
-    def gestore(request):
-        corpo = {
-            "id": "x", "object": "chat.completion", "created": 0, "model": "m",
-            "choices": [{
-                "index": 0, "finish_reason": finish_reason,
-                "message": {"role": "assistant", "content": contenuto},
-            }],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-        }
-        return httpx.Response(200, json=corpo)
-
-    return gestore
+from tests.fakes import chat_con_server_finto, risposta_del_server
 
 
 def router_reale(monkeypatch, gestore):
     """Il vero crea_router, con un ChatOpenAI che parla con un server finto."""
-    chat = ChatOpenAI(
-        base_url="http://server-finto/v1", model="m", api_key="k", max_retries=0,
-        http_client=httpx.Client(transport=httpx.MockTransport(gestore)),
-    )
+    chat = chat_con_server_finto(gestore)
     monkeypatch.setattr(modulo_modello, "_chat", lambda config: chat)
     config = Configurazione(
         "http://server-finto/v1", "m", "Europe/Rome", 3, "INFO",
@@ -634,3 +616,157 @@ def test_router_reale_errore_di_connessione_non_e_fail_open(monkeypatch):
     )
     with pytest.raises(openai.APIConnectionError):
         invoca(grafo, "Ciao")
+
+
+# --- Revisore ---
+
+from assistente.revisore import DecisioneRevisore, e_indicazione
+from tests.fakes import RevisoreFinto
+
+
+def giudizio(coerente, motivo="motivo"):
+    return DecisioneRevisore(coerente=coerente, motivo=motivo)
+
+
+def crea_con_revisore(giudizi, risposte, *, decisioni_router=None, max_revisioni=2, archivio=None,
+                      max_passaggi=3):
+    revisore = RevisoreFinto(giudizi)
+    modello = ModelloFinto(risposte)
+    router = RouterFinto(decisioni_router) if decisioni_router is not None else None
+    grafo = costruisci_grafo(
+        modello, crea_strumenti(AUTUNNO, archivio=archivio), "Europe/Rome", max_passaggi,
+        archivio=archivio, router=router, ambito=AMBITO,
+        revisore=revisore, max_revisioni=max_revisioni,
+    )
+    return revisore, modello, grafo
+
+
+def config_revisore(max_passaggi=3, max_revisioni=2):
+    return {
+        "recursion_limit": limite_ricorsione(max_passaggi, max_revisioni),
+        "configurable": {"thread_id": "t"},
+    }
+
+
+def chiedi(grafo, testo, **kwargs):
+    return grafo.invoke(
+        {"messages": [HumanMessage(testo)], "passaggi_strumenti": 0, "revisioni": 0},
+        config_revisore(**kwargs),
+    )
+
+
+def test_revisore_approva_al_primo_passaggio(caplog):
+    caplog.set_level(logging.INFO)
+    revisore, modello, grafo = crea_con_revisore(
+        [giudizio(True, "risponde all'ora")], [AIMessage("Sono le 17:05.")]
+    )
+    stato = chiedi(grafo, "Che ore sono?")
+    assert stato["messages"][-1].content == "Sono le 17:05."
+    assert len(modello.chiamate) == 1
+    assert len(revisore.chiamate) == 1
+    assert stato["revisioni"] == 0
+    assert "revisore: coerente=sì motivo=risponde all'ora -> fine" in messaggi_log(caplog)
+
+
+def test_revisore_rifiuta_risposta_parziale_e_l_agente_la_completa(caplog):
+    caplog.set_level(logging.INFO)
+    revisore, modello, grafo = crea_con_revisore(
+        [giudizio(False, "manca il calcolo"), giudizio(True)],
+        [AIMessage("A Tokyo sono le 00:49."), AIMessage("A Tokyo sono le 00:49 e 2+2 fa 4.")],
+    )
+    stato = chiedi(grafo, "Che ore sono a Tokyo e quanto fa 2+2?")
+    assert stato["messages"][-1].content == "A Tokyo sono le 00:49 e 2+2 fa 4."
+    assert stato["revisioni"] == 1
+    # La seconda chiamata all'agente vede l'indicazione con il motivo come ultimo messaggio.
+    ultimo_visto = modello.chiamate[1][-1]
+    assert e_indicazione(ultimo_visto)
+    assert "manca il calcolo" in ultimo_visto.content
+    # Il revisore giudica la nuova risposta, non la bozza.
+    assert revisore.chiamate[1][-1].content.endswith(
+        "Risposta proposta: A Tokyo sono le 00:49 e 2+2 fa 4."
+    )
+    assert (
+        "revisore: coerente=no motivo=manca il calcolo -> agente (revisione 1 di 2)"
+        in messaggi_log(caplog)
+    )
+
+
+def test_revisore_che_rifiuta_sempre_rispetta_il_limite(caplog):
+    caplog.set_level(logging.INFO)
+    revisore, modello, grafo = crea_con_revisore(
+        [giudizio(False, "incompleta")] * 3,
+        [AIMessage("prima"), AIMessage("seconda"), AIMessage("terza")],
+        max_revisioni=2,
+    )
+    stato = chiedi(grafo, "domanda", max_revisioni=2)
+    assert len(revisore.chiamate) == 3
+    assert len(modello.chiamate) == 3
+    assert stato["messages"][-1].content == "terza"
+    avvisi = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert "revisore: limite di 2 revisioni raggiunto, si restituisce l'ultima risposta" in avvisi
+
+
+def test_revisore_output_non_valido_approva(caplog):
+    caplog.set_level(logging.INFO)
+    _, modello, grafo = crea_con_revisore([None], [AIMessage("Ciao!")])
+    stato = chiedi(grafo, "Ciao")
+    assert stato["messages"][-1].content == "Ciao!"
+    assert len(modello.chiamate) == 1
+    avvisi = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(a.startswith("revisore: output non valido") for a in avvisi), avvisi
+
+
+def test_rifiuto_del_router_non_passa_dal_revisore():
+    revisore, modello, grafo = crea_con_revisore(
+        [], [], decisioni_router=[decisione("fuori_ambito", "ricetta")]
+    )
+    stato = chiedi(grafo, "Dammi la ricetta della carbonara")
+    assert stato["messages"][-1].content == messaggio_rifiuto(AMBITO)
+    assert revisore.chiamate == []
+    assert modello.chiamate == []
+
+
+def test_limite_degli_strumenti_non_passa_dal_revisore():
+    risposte = [chiamata_strumento("Europe/Rome", id=f"call_{i}") for i in range(3)]
+    revisore, _, grafo = crea_con_revisore([], risposte, max_passaggi=2)
+    stato = chiedi(grafo, "Che ore sono?", max_passaggi=2)
+    assert stato["messages"][-1].content == MESSAGGIO_LIMITE
+    assert revisore.chiamate == []
+
+
+def test_revisore_dopo_uno_strumento_vede_solo_domanda_e_risposta():
+    revisore, _, grafo = crea_con_revisore(
+        [giudizio(True)], [chiamata_strumento("Europe/Rome"), AIMessage("Sono le 17:05.")]
+    )
+    chiedi(grafo, "Che ore sono?")
+    testo = revisore.chiamate[0][-1].content
+    assert testo == "Domanda dell'utente: Che ore sono?\n\nRisposta proposta: Sono le 17:05."
+
+
+def test_revisore_dopo_la_conferma_di_eliminazione(archivio):
+    archivio.aggiungi("sensore SEN-004 da ricalibrare")
+    revisore, _, grafo = crea_con_revisore(
+        [giudizio(True)], [elimina(1), AIMessage("Nota eliminata.")], archivio=archivio
+    )
+    esito = chiedi(grafo, "elimina la nota 1")
+    assert esito.get("__interrupt__")
+    assert revisore.chiamate == []
+    stato = grafo.invoke(Command(resume=True), config_revisore())
+    assert stato["messages"][-1].content == "Nota eliminata."
+    assert len(revisore.chiamate) == 1
+
+
+def test_limite_ricorsione_basta_con_revisioni_e_strumenti(archivio):
+    # Caso peggiore: router, tutti i passaggi con conferma, poi tutte le revisioni al massimo.
+    max_passaggi, max_revisioni = 3, 2
+    risposte = [elimina(99, id=f"call_{i}") for i in range(max_passaggi)] + [
+        AIMessage(f"risposta {i}") for i in range(max_revisioni + 1)
+    ]
+    revisore, modello, grafo = crea_con_revisore(
+        [giudizio(False)] * (max_revisioni + 1), risposte,
+        decisioni_router=[decisione("conversazione")], archivio=archivio,
+        max_passaggi=max_passaggi, max_revisioni=max_revisioni,
+    )
+    stato = chiedi(grafo, "elimina", max_passaggi=max_passaggi, max_revisioni=max_revisioni)
+    assert stato["messages"][-1].content == f"risposta {max_revisioni}"
+    assert len(revisore.chiamate) == max_revisioni + 1

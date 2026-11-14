@@ -20,6 +20,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
 from assistente.note import ArchivioNote
+from assistente.revisore import e_indicazione, indicazione, prompt_revisore, testo_da_revisionare
 from assistente.router import messaggio_rifiuto, prompt_router, testo_da_classificare
 
 log = logging.getLogger(__name__)
@@ -40,6 +41,8 @@ class StatoConversazione(TypedDict):
     # Decisione del router per la domanda corrente: "conversazione" o "fuori_ambito".
     categoria: NotRequired[str]
     motivo: NotRequired[str]
+    # Risposte rimandate all'agente dal revisore nel turno corrente.
+    revisioni: NotRequired[int]
 
 
 def prompt_di_sistema(fuso_predefinito: str) -> str:
@@ -90,10 +93,16 @@ def instrada_dopo_router(stato: StatoConversazione) -> Literal["agente", "rifiut
     return "rifiuto" if stato.get("categoria") == "fuori_ambito" else "agente"
 
 
-def limite_ricorsione(max_passaggi: int) -> int:
+def instrada_dopo_revisore(stato: StatoConversazione) -> Literal["agente", "__end__"]:
+    # Il revisore aggiunge un'indicazione solo quando rimanda la risposta all'agente.
+    return "agente" if e_indicazione(stato["messages"][-1]) else "__end__"
+
+
+def limite_ricorsione(max_passaggi: int, max_revisioni: int = 0) -> int:
     # Ogni giro con gli strumenti conta fino a tre passi: agente, conferma, strumenti.
+    # Ogni risposta finale conta due passi: agente e revisore (al massimo max_revisioni + 1).
     # +6: router, rifiuto, e i passi iniziali/finali.
-    return 3 * max_passaggi + 6
+    return 3 * max_passaggi + 2 * (max_revisioni + 1) + 6
 
 
 def numero_nota(args: dict) -> int | None:
@@ -115,6 +124,8 @@ def costruisci_grafo(
     *,
     router: Runnable | None = None,
     ambito: str = "",
+    revisore: Runnable | None = None,
+    max_revisioni: int = 2,
 ) -> CompiledStateGraph:
     per_nome = {s.name: s for s in strumenti}
     if router is not None and not ambito.strip():
@@ -179,6 +190,40 @@ def costruisci_grafo(
     def nodo_rifiuto(stato: StatoConversazione) -> dict:
         log.info("rifiuto: domanda fuori ambito, agente non eseguito")
         return {"messages": [AIMessage(messaggio_rifiuto(ambito))]}
+
+    def nodo_revisore(stato: StatoConversazione) -> dict:
+        esito = revisore.invoke(
+            [
+                SystemMessage(prompt_revisore()),
+                HumanMessage(testo_da_revisionare(stato["messages"])),
+            ]
+        )
+        giudizio = esito.get("parsed")
+        if giudizio is None:
+            # Fail-open: un guasto di formato del revisore non deve bloccare la risposta.
+            log.warning(
+                "revisore: output non valido (%s), la risposta è approvata",
+                esito.get("parsing_error"),
+            )
+            return {}
+        if giudizio.coerente:
+            log.info("revisore: coerente=sì motivo=%s -> fine", giudizio.motivo)
+            return {}
+        fatte = stato.get("revisioni", 0)
+        if fatte >= max_revisioni:
+            log.info("revisore: coerente=no motivo=%s -> fine", giudizio.motivo)
+            log.warning(
+                "revisore: limite di %d revisioni raggiunto, si restituisce l'ultima risposta",
+                max_revisioni,
+            )
+            return {}
+        log.info(
+            "revisore: coerente=no motivo=%s -> agente (revisione %d di %d)",
+            giudizio.motivo,
+            fatte + 1,
+            max_revisioni,
+        )
+        return {"messages": [indicazione(giudizio.motivo)], "revisioni": fatte + 1}
 
     def nodo_agente(stato: StatoConversazione) -> dict:
         log.info("agente: chiamata al modello")
@@ -261,9 +306,15 @@ def costruisci_grafo(
             "strumenti": "strumenti",
             "conferma_eliminazione": "conferma_eliminazione",
             "limite_raggiunto": "limite_raggiunto",
-            "__end__": END,
+            # Con il revisore la risposta finale passa da lui prima della fine del turno.
+            "__end__": "revisore" if revisore is not None else END,
         },
     )
+    if revisore is not None:
+        grafo.add_node("revisore", nodo_revisore)
+        grafo.add_conditional_edges(
+            "revisore", instrada_dopo_revisore, {"agente": "agente", "__end__": END}
+        )
     grafo.add_edge("conferma_eliminazione", "strumenti")
     grafo.add_edge("strumenti", "agente")
     grafo.add_edge("limite_raggiunto", END)

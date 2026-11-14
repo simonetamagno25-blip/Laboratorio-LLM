@@ -87,3 +87,17 @@ def test_percorso_note_personalizzato():
 def test_ambito_vuoto():
     with pytest.raises(ErroreConfigurazione, match="AMBITO_AGENTE"):
         carica_configurazione({**BASE, "AMBITO_AGENTE": "  "})
+
+
+def test_max_revisioni_predefinito():
+    assert carica_configurazione(BASE).max_revisioni == 2
+
+
+def test_max_revisioni_letto():
+    assert carica_configurazione({**BASE, "MAX_REVISIONI": " 1 "}).max_revisioni == 1
+
+
+@pytest.mark.parametrize("valore", ["0", "-1", "abc", "1.5"])
+def test_max_revisioni_non_valido(valore):
+    with pytest.raises(ErroreConfigurazione, match="MAX_REVISIONI"):
+        carica_configurazione({**BASE, "MAX_REVISIONI": valore})

@@ -22,12 +22,24 @@ class Configurazione:
     scadenze_api_url: str
     percorso_db_note: str
     ambito: str
+    max_revisioni: int = 2
 
 
 def _obbligatoria(env: Mapping[str, str], nome: str) -> str:
     valore = env.get(nome, "").strip()
     if not valore:
         raise ErroreConfigurazione(f"Variabile d'ambiente obbligatoria mancante o vuota: {nome}")
+    return valore
+
+
+def _intero_positivo(env: Mapping[str, str], nome: str, predefinito: str) -> int:
+    grezzo = env.get(nome, "").strip() or predefinito
+    try:
+        valore = int(grezzo)
+    except ValueError as errore:
+        raise ErroreConfigurazione(f"{nome} deve essere un intero positivo: {grezzo!r}") from errore
+    if valore < 1:
+        raise ErroreConfigurazione(f"{nome} deve essere un intero positivo: {grezzo!r}")
     return valore
 
 
@@ -46,17 +58,7 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
             f"FUSO_ORARIO_PREDEFINITO non valido: {fuso!r}"
         ) from errore
 
-    grezzo = env.get("MAX_PASSAGGI_STRUMENTI", "").strip() or "3"
-    try:
-        max_passaggi = int(grezzo)
-    except ValueError as errore:
-        raise ErroreConfigurazione(
-            f"MAX_PASSAGGI_STRUMENTI deve essere un intero positivo: {grezzo!r}"
-        ) from errore
-    if max_passaggi < 1:
-        raise ErroreConfigurazione(
-            f"MAX_PASSAGGI_STRUMENTI deve essere un intero positivo: {grezzo!r}"
-        )
+    max_passaggi = _intero_positivo(env, "MAX_PASSAGGI_STRUMENTI", "3")
 
     log_level = (env.get("LOG_LEVEL", "").strip() or "INFO").upper()
     if log_level not in logging.getLevelNamesMapping():
@@ -70,6 +72,7 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
     percorso_db_note = env.get("PERCORSO_DB_NOTE", "").strip() or "note.sqlite3"
 
     ambito = _obbligatoria(env, "AMBITO_AGENTE")
+    max_revisioni = _intero_positivo(env, "MAX_REVISIONI", "2")
 
     return Configurazione(
         base_url,
@@ -80,4 +83,5 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
         scadenze_api_url,
         percorso_db_note,
         ambito,
+        max_revisioni,
     )

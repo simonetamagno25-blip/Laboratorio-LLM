@@ -1,6 +1,7 @@
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from assistente import router
+from assistente.revisore import indicazione
 from assistente.router import messaggio_rifiuto, prompt_router
 from tests.fakes import chiamata_strumento
 
@@ -75,3 +76,21 @@ def test_prompt_seguiti_solo_di_argomenti_in_ambito():
     prompt = prompt_router("ora e date")
     assert "in ambito" in prompt
     assert "seguito di una domanda fuori ambito" in prompt
+
+
+def test_testo_ignora_indicazioni_del_revisore_e_bozze():
+    messaggi = [
+        HumanMessage("Che ore sono a Tokyo e quanto fa 2+2?"),
+        AIMessage("A Tokyo sono le 00:49."),
+        indicazione("manca il calcolo"),
+        AIMessage("A Tokyo sono le 00:49 e 2+2 fa 4."),
+        HumanMessage("Grazie"),
+    ]
+    testo = router.testo_da_classificare(messaggi)
+    assert "Indicazione del revisore" not in testo
+    assert "Assistente: A Tokyo sono le 00:49.\n" not in testo
+    assert (
+        "Utente: Che ore sono a Tokyo e quanto fa 2+2?\n"
+        "Assistente: A Tokyo sono le 00:49 e 2+2 fa 4."
+    ) in testo
+    assert testo.endswith("Domanda da classificare: Grazie")

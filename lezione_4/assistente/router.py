@@ -2,8 +2,10 @@
 
 from typing import Literal
 
-from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
+from langchain_core.messages import AnyMessage
 from pydantic import BaseModel, Field
+
+from assistente.turni import indice_domanda_corrente, righe_precedenti
 
 
 class DecisioneRouter(BaseModel):
@@ -31,24 +33,11 @@ def prompt_router(ambito: str) -> str:
     )
 
 
-def _riga(messaggio: AnyMessage, massimo: int) -> str:
-    chi = "Utente" if isinstance(messaggio, HumanMessage) else "Assistente"
-    return f"{chi}: {messaggio.text.strip()[:massimo]}"
-
-
 def testo_da_classificare(messaggi: list[AnyMessage], turni: int = 3, massimo: int = 300) -> str:
-    """Domanda corrente (ultimo HumanMessage) preceduta dagli ultimi turni, senza strumenti."""
-    indici = [i for i, m in enumerate(messaggi) if isinstance(m, HumanMessage)]
-    corrente = indici[-1]
-    # Un turno inizia con una domanda dell'utente: si parte dall'inizio dei turni da tenere.
-    inizio = indici[max(0, len(indici) - 1 - turni)] if len(indici) > 1 else corrente
-    precedenti = [
-        _riga(m, massimo)
-        for m in messaggi[inizio:corrente]
-        if isinstance(m, HumanMessage)
-        or (isinstance(m, AIMessage) and not m.tool_calls and m.text.strip())
-    ]
-    domanda = f"Domanda da classificare: {messaggi[corrente].text.strip()}"
+    """Domanda corrente (ultima domanda vera) preceduta dagli ultimi turni, senza strumenti."""
+    precedenti = righe_precedenti(messaggi, turni, massimo)
+    corrente = messaggi[indice_domanda_corrente(messaggi)]
+    domanda = f"Domanda da classificare: {corrente.text.strip()}"
     if not precedenti:
         return domanda
     return "Turni precedenti:\n" + "\n".join(precedenti) + "\n\n" + domanda

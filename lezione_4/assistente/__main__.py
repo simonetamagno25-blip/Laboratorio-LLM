@@ -93,7 +93,7 @@ def _avvia(config, catalogo, archivio) -> int:
         )
 
         print(f"Assistente del laboratorio (modello: {config.modello}). Scrivi /esci per uscire.")
-        esegui_ciclo(sessione, config.base_url)
+        esegui_ciclo(sessione, config.base_url, prompt=client_mcp)
     finally:
         client_mcp.chiudi()
     return 0

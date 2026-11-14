@@ -385,3 +385,118 @@ def test_la_sessione_conserva_e_ripassa_il_riassunto():
     assert sessione.riassunto == "L'utente si chiama Giulia."
     assert [m.content for m in sessione.cronologia] == ["Come mi chiamo?", "Ti chiami Giulia."]
     assert modello.chiamate[2][0].content.endswith("L'utente si chiama Giulia.")
+
+
+# --- Prompt MCP ---
+
+from assistente.client_mcp import ArgomentoPrompt, ErroreMCP, InfoPrompt
+
+
+class PromptFinti:
+    """Client MCP finto per i prompt: elenco fisso e messaggi registrati."""
+
+    ELENCO = [
+        InfoPrompt(
+            "spiega",
+            "Spiega un argomento al livello richiesto.",
+            (
+                ArgomentoPrompt("argomento", "concetto da spiegare", True),
+                ArgomentoPrompt("livello", "base, intermedio o avanzato", False),
+            ),
+        )
+    ]
+
+    def __init__(self, errore=None):
+        self.richiesti = []
+        self._errore = errore
+
+    def elenca_prompt(self):
+        return self.ELENCO
+
+    def ottieni_prompt(self, nome, argomenti):
+        self.richiesti.append((nome, argomenti))
+        if self._errore:
+            raise self._errore
+        return [("user", f"Spiegami «{argomenti['argomento']}» a livello base.")]
+
+
+def ciclo_con_prompt(sessione, ingressi, prompt):
+    voci = iter(ingressi)
+    uscite = []
+    esegui_ciclo(
+        sessione,
+        "http://x/v1",
+        leggi=lambda _: next(voci),
+        scrivi=uscite.append,
+        scarta_anticipato=lambda: None,
+        prompt=prompt,
+    )
+    return "\n".join(uscite)
+
+
+def test_comando_prompts_elenca_i_prompt():
+    modello, sessione = crea([])
+    uscita = ciclo_con_prompt(sessione, ["/prompts", "/esci"], PromptFinti())
+    assert "spiega — Spiega un argomento al livello richiesto." in uscita
+    assert "argomento (obbligatorio)" in uscita
+    assert modello.chiamate == []
+
+
+def test_comando_prompt_valido_va_al_grafo_e_in_cronologia():
+    modello, sessione = crea([AIMessage("MCP è un protocollo...")])
+    prompt = PromptFinti()
+    uscita = ciclo_con_prompt(
+        sessione, ['/prompt spiega argomento="Model Context Protocol"', "/esci"], prompt
+    )
+    assert prompt.richiesti == [("spiega", {"argomento": "Model Context Protocol"})]
+    assert len(modello.chiamate) == 1
+    assert modello.chiamate[0][-1].content == "Spiegami «Model Context Protocol» a livello base."
+    assert "Assistente> MCP è un protocollo..." in uscita
+    assert [m.content for m in sessione.cronologia] == [
+        "Spiegami «Model Context Protocol» a livello base.",
+        "MCP è un protocollo...",
+    ]
+
+
+@pytest.mark.parametrize(
+    "riga, frammento",
+    [
+        ("/prompt spiega", "Argomento obbligatorio mancante: argomento"),
+        ("/prompt spiega argomento=MCP lingua=en", "Argomento sconosciuto: lingua"),
+        ("/prompt traduci testo=ciao", "Prompt sconosciuto: traduci"),
+        ('/prompt spiega argomento="MCP', "Virgolette non chiuse"),
+    ],
+)
+def test_comando_prompt_non_valido_non_chiama_il_modello(riga, frammento):
+    modello, sessione = crea([])
+    prompt = PromptFinti()
+    uscita = ciclo_con_prompt(sessione, [riga, "/esci"], prompt)
+    assert frammento in uscita
+    assert prompt.richiesti == []
+    assert modello.chiamate == []
+    assert sessione.cronologia == []
+
+
+def test_errore_del_server_sul_prompt_non_chiama_il_modello():
+    modello, sessione = crea([])
+    prompt = PromptFinti(errore=ErroreMCP("MCPError: Error rendering prompt spiega"))
+    uscita = ciclo_con_prompt(sessione, ["/prompt spiega argomento=x livello=esperto", "/esci"], prompt)
+    assert "Prompt non disponibile: MCPError: Error rendering prompt spiega" in uscita
+    assert "/prompts" in uscita
+    assert modello.chiamate == []
+
+
+def test_prompt_senza_client_mcp():
+    modello, sessione = crea([])
+    uscita = ciclo(sessione, ["/prompts", "/esci"])
+    assert "Prompt MCP non disponibili" in uscita
+
+
+def test_ctrl_c_durante_il_comando_prompt():
+    class PromptInterrotti(PromptFinti):
+        def elenca_prompt(self):
+            raise KeyboardInterrupt
+
+    modello, sessione = crea([])
+    uscita = ciclo_con_prompt(sessione, ["/prompts"], PromptInterrotti())
+    assert uscita.endswith("Arrivederci.")

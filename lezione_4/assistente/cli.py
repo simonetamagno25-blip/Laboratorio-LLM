@@ -7,6 +7,14 @@ from uuid import uuid4
 from langchain_core.messages import BaseMessage, HumanMessage
 from langgraph.types import Command
 
+from assistente.client_mcp import ErroreMCP
+from assistente.comandi import (
+    ErroreComando,
+    descrivi_prompt,
+    in_messaggi,
+    interpreta_comando_prompt,
+    valida,
+)
 from assistente.modello import descrivi_errore
 
 
@@ -65,6 +73,10 @@ class Sessione:
         self.riassunto = ""
 
     def chiedi(self, testo: str) -> str | Conferma:
+        return self.chiedi_messaggi([HumanMessage(testo)])
+
+    def chiedi_messaggi(self, messaggi: list[BaseMessage]) -> str | Conferma:
+        """Come chiedi, con i messaggi già pronti (per esempio quelli di un prompt MCP)."""
         # Un thread nuovo per ogni domanda: il checkpointer serve solo alla pausa dentro il
         # turno, la cronologia resta in questa lista e si aggiorna solo se il turno finisce bene.
         self._config = {
@@ -74,7 +86,7 @@ class Sessione:
         return self._esito(
             self._grafo.invoke(
                 {
-                    "messages": self.cronologia + [HumanMessage(testo)],
+                    "messages": self.cronologia + list(messaggi),
                     "passaggi_strumenti": 0,
                     "revisioni": 0,
                     "riassunto": self.riassunto,
@@ -95,13 +107,23 @@ class Sessione:
         return self.cronologia[-1].content or "(risposta vuota)"
 
 
+def _comando_prompt(riga: str, prompt) -> list[BaseMessage]:
+    """/prompt nome chiave=valore: controllo su prompts/list, poi prompts/get. Gli errori
+    (ErroreComando, ErroreMCP) arrivano prima di qualsiasi chiamata al modello."""
+    nome, argomenti = interpreta_comando_prompt(riga)
+    valida(nome, argomenti, prompt.elenca_prompt())
+    return in_messaggi(prompt.ottieni_prompt(nome, argomenti))
+
+
 def esegui_ciclo(
     sessione: Sessione,
     base_url: str,
     leggi=input,
     scrivi=print,
     scarta_anticipato=scarta_input_anticipato,
+    prompt=None,
 ) -> None:
+    """Ciclo del terminale. `prompt` è il client MCP per /prompts e /prompt (facoltativo)."""
     while True:
         try:
             riga = leggi("Tu> ").strip()
@@ -113,9 +135,29 @@ def esegui_ciclo(
         if riga == "/esci":
             scrivi("Arrivederci.")
             return
+        if riga == "/prompts" or riga == "/prompt" or riga.startswith("/prompt "):
+            if prompt is None:
+                scrivi("Prompt MCP non disponibili in questa sessione.")
+                continue
+            try:
+                if riga == "/prompts":
+                    scrivi(descrivi_prompt(prompt.elenca_prompt()))
+                    continue
+                messaggi = _comando_prompt(riga, prompt)
+            except ErroreComando as errore:
+                scrivi(str(errore))
+                continue
+            except ErroreMCP as errore:
+                scrivi(f"Prompt non disponibile: {errore}. Controlla nome e argomenti con /prompts.")
+                continue
+            except KeyboardInterrupt:
+                scrivi("Arrivederci.")
+                return
+        else:
+            messaggi = [HumanMessage(riga)]
         try:
             scrivi(ATTESA)
-            esito = sessione.chiedi(riga)
+            esito = sessione.chiedi_messaggi(messaggi)
             while isinstance(esito, Conferma):
                 scrivi(esito.domanda)
                 try:

@@ -4,6 +4,7 @@ import pytest
 
 import assistente.__main__ as punto_di_ingresso
 from assistente.catalogo import ErroreCatalogo
+from tests.fakes import RouterFinto
 
 ENV = {
     "LMSTUDIO_BASE_URL": "http://localhost:1234/v1",
@@ -39,15 +40,23 @@ def test_avvio_con_tutti_gli_strumenti(monkeypatch, capsys):
     def ciclo_finto(sessione, base_url):
         nomi.extend(sessione.nomi_strumenti)
 
+    grafi = []
+    ambiti = []
+
     class SessioneFinta:
         def __init__(self, grafo, limite):
-            pass
+            grafi.append(grafo)
 
     def crea_modello_finto(config, strumenti):
         SessioneFinta.nomi_strumenti = [s.name for s in strumenti]
         return object()
 
+    def crea_router_finto(config):
+        ambiti.append(config.ambito)
+        return RouterFinto([])
+
     monkeypatch.setattr(punto_di_ingresso, "crea_modello", crea_modello_finto)
+    monkeypatch.setattr(punto_di_ingresso, "crea_router", crea_router_finto)
     monkeypatch.setattr(punto_di_ingresso, "Sessione", SessioneFinta)
     monkeypatch.setattr(punto_di_ingresso, "esegui_ciclo", ciclo_finto)
     assert punto_di_ingresso.main() == 0
@@ -64,6 +73,8 @@ def test_avvio_con_tutti_gli_strumenti(monkeypatch, capsys):
         "giorni_tra_date",
         "calcola_scadenza",
     ]
+    assert ambiti == ["ora e date"]
+    assert "router" in grafi[0].get_graph().nodes
 
 
 def test_catalogo_non_valido_blocca_l_avvio(monkeypatch, capsys):
@@ -143,6 +154,7 @@ def test_archivio_chiuso_a_fine_sessione(monkeypatch):
 
     monkeypatch.setattr(ArchivioNote, "chiudi", registra)
     monkeypatch.setattr(punto_di_ingresso, "crea_modello", lambda config, strumenti: object())
+    monkeypatch.setattr(punto_di_ingresso, "crea_router", lambda config: object())
     monkeypatch.setattr(punto_di_ingresso, "esegui_ciclo", lambda sessione, base_url: None)
     assert punto_di_ingresso.main() == 0
     assert chiuso

@@ -9,7 +9,7 @@ from assistente.client_api import crea_strumenti_api
 from assistente.client_mcp import ClientMCP, ErroreMCP, comando_convertitore
 from assistente.config import ErroreConfigurazione, carica_configurazione
 from assistente.grafo import costruisci_grafo, limite_ricorsione
-from assistente.modello import crea_modello
+from assistente.modello import crea_modello, crea_router
 from assistente.note import ErroreArchivio, apri_archivio
 from assistente.strumenti import crea_strumenti
 
@@ -74,6 +74,8 @@ def _avvia(config, catalogo, archivio) -> int:
             config.fuso_predefinito,
             config.max_passaggi_strumenti,
             archivio=archivio,
+            router=crea_router(config),
+            ambito=config.ambito,
         )
         sessione = Sessione(grafo, limite_ricorsione(config.max_passaggi_strumenti))
 

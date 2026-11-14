@@ -4,7 +4,7 @@ from langchain_core.runnables import Runnable
 
 from assistente.__main__ import main
 from assistente.config import Configurazione
-from assistente.modello import crea_modello, descrivi_errore
+from assistente.modello import crea_modello, crea_router, descrivi_errore
 from assistente.strumenti import crea_strumenti
 
 
@@ -25,18 +25,25 @@ def test_descrivi_errore_generico():
     assert descrivi_errore(RuntimeError("boh"), "u") == "Errore durante la risposta: boh"
 
 
+CONFIG = Configurazione(
+    "http://localhost:1234/v1",
+    "m",
+    "Europe/Rome",
+    3,
+    "INFO",
+    "http://localhost:8000",
+    "note.sqlite3",
+    "ora e date",
+)
+
+
 def test_crea_modello_e_un_runnable():
-    config = Configurazione(
-        "http://localhost:1234/v1",
-        "m",
-        "Europe/Rome",
-        3,
-        "INFO",
-        "http://localhost:8000",
-        "note.sqlite3",
-        "ora e date",
-    )
-    assert isinstance(crea_modello(config, crea_strumenti()), Runnable)
+    assert isinstance(crea_modello(CONFIG, crea_strumenti()), Runnable)
+
+
+def test_crea_router_e_un_runnable():
+    # La costruzione non contatta il server: nessuna rete.
+    assert isinstance(crea_router(CONFIG), Runnable)
 
 
 def test_main_senza_configurazione(monkeypatch, capsys):

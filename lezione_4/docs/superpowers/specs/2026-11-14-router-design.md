@@ -60,8 +60,9 @@ non sceglie gli strumenti: se servono, li sceglie l'agente come prima.
 - `prompt_router(ambito) -> str` è il prompt di sistema del router. Contiene:
   - il compito: classificare la domanda, senza rispondere;
   - l'ambito;
-  - l'indicazione che saluti, ringraziamenti, domande sull'assistente e follow-up dei turni
-    precedenti sono `conversazione`;
+  - l'indicazione che saluti, ringraziamenti, domande sull'assistente e follow-up di argomenti
+    in ambito dei turni precedenti sono `conversazione`, mentre il seguito di una domanda fuori
+    ambito resta `fuori_ambito` (modifica dopo la revisione finale del branch);
   - nessun riferimento agli strumenti.
 - `testo_da_classificare(messaggi) -> str` costruisce un solo testo con gli ultimi 3 turni
   precedenti (solo domande dell'utente e risposte finali dell'assistente, senza chiamate a
@@ -134,6 +135,8 @@ non sceglie gli strumenti: se servono, li sceglie l'agente come prima.
 - Fuori ambito: «Dammi la ricetta della carbonara» → `fuori_ambito`, nessuna esecuzione dell'agente.
 - Tema del corso: «Che cos'è LangGraph?» → `conversazione`.
 - Follow-up: «Che ore sono a Tokyo?» poi «e a New York?» → il secondo turno è `conversazione`.
+- Seguito fuori ambito: «Dammi la ricetta della carbonara» poi «e quella dell'amatriciana?» → il
+  secondo turno è `fuori_ambito`.
 - Prova manuale dalla CLI con `LOG_LEVEL=INFO`: una domanda in ambito e una fuori ambito, con i log
   da mostrare come evidenza.
 - Le prove reali esistenti (23–29 minuti) passeranno dal router tramite `grafo_completo`. Le rilancio

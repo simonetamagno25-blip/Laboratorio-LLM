@@ -68,3 +68,10 @@ def test_rifiuto_cita_l_ambito():
     rifiuto = messaggio_rifiuto("ora e date")
     assert "fuori" in rifiuto
     assert rifiuto.rstrip(".").endswith("ora e date")
+
+
+def test_prompt_seguiti_solo_di_argomenti_in_ambito():
+    # Un seguito di una domanda fuori ambito («e quella dell'amatriciana?») resta fuori ambito.
+    prompt = prompt_router("ora e date")
+    assert "in ambito" in prompt
+    assert "seguito di una domanda fuori ambito" in prompt

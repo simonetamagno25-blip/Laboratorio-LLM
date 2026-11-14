@@ -304,3 +304,11 @@ def test_router_follow_up(grafo_completo):
     primo = turno(grafo_completo, [HumanMessage("Che ore sono adesso a Tokyo?")])
     secondo = turno(grafo_completo, primo["messages"] + [HumanMessage("e a New York?")])
     assert secondo["categoria"] == "conversazione", secondo.get("motivo")
+
+
+@pytest.mark.lmstudio
+def test_router_seguito_fuori_ambito(grafo_completo):
+    primo = turno(grafo_completo, [HumanMessage("Dammi la ricetta della carbonara")])
+    assert primo["categoria"] == "fuori_ambito", primo.get("motivo")
+    secondo = turno(grafo_completo, primo["messages"] + [HumanMessage("e quella dell'amatriciana?")])
+    assert secondo["categoria"] == "fuori_ambito", secondo.get("motivo")

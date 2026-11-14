@@ -24,8 +24,10 @@ def prompt_router(ambito: str) -> str:
         "Rispondi con categoria «conversazione» se la domanda rientra nell'ambito, "
         "con «fuori_ambito» se non vi rientra, e con il motivo in una frase breve in italiano.\n"
         "Sono sempre «conversazione»: saluti, ringraziamenti, domande sull'assistente e "
-        "domande che proseguono i turni precedenti della conversazione, anche se brevi "
-        "(per esempio «e a Tokyo?»)."
+        "domande brevi che proseguono un argomento in ambito dei turni precedenti "
+        "(per esempio «e a Tokyo?» dopo una domanda sull'ora).\n"
+        "Il seguito di una domanda fuori ambito resta «fuori_ambito» (per esempio "
+        "«e quella dell'amatriciana?» dopo una richiesta di ricetta)."
     )
 
 

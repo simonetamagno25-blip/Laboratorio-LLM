@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from langchain_core.messages import BaseMessage, HumanMessage
 
 from assistente.agente import Agente, RichiestaConferma, Risposta
+from assistente.client_agente import ErroreAgente
 from assistente.client_mcp import ErroreMCP
 from assistente.comandi import (
     ErroreComando,
@@ -156,5 +157,7 @@ def esegui_ciclo(
         except KeyboardInterrupt:
             scrivi("Arrivederci.")
             return
+        except ErroreAgente as errore:
+            scrivi(str(errore))
         except Exception as errore:
             scrivi(descrivi_errore(errore, base_url))

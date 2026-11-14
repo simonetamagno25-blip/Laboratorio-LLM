@@ -1,11 +1,26 @@
 services:
+  # CLI: client dell'API dell'agente (python -m assistente).
   assistente:
     build: .
+    environment:
+      AGENTE_URL: http://agente:8100
+    depends_on:
+      - agente
+    stdin_open: true
+    tty: true
+
+  # Agente come servizio HTTP (python -m assistente.servizio): grafo, client MCP e strumenti.
+  # Nessuna porta pubblicata: lo raggiungono solo gli altri container.
+  agente:
+    build: .
+    command: ["python", "-m", "assistente.servizio"]
     env_file: .env
     environment:
       LMSTUDIO_BASE_URL: http://host.docker.internal:1234/v1
       SCADENZE_API_URL: http://scadenze:8000
       PERCORSO_DB_NOTE: /app/note/note.sqlite3
+      AGENTE_HOST: 0.0.0.0
+      AGENTE_PORTA: "8100"
     volumes:
       # Le note restano anche quando il container viene ricreato; `docker compose down -v` le cancella.
       - note:/app/note
@@ -15,8 +30,6 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       - scadenze
-    stdin_open: true
-    tty: true
 
   scadenze:
     build: .

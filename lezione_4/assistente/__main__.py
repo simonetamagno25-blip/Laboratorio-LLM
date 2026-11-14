@@ -1,101 +1,36 @@
-"""Punto d'ingresso: python -m assistente."""
+"""Punto d'ingresso della CLI: python -m assistente.
+
+La CLI è un client dell'API dell'agente (python -m assistente.servizio), indicato da AGENTE_URL.
+"""
 
 import logging
+import os
 import sys
 
-from assistente.catalogo import ErroreCatalogo, carica_catalogo
-from assistente.cli import Sessione, esegui_ciclo
-from assistente.client_api import crea_strumenti_api
-from assistente.client_mcp import ClientMCP, ErroreMCP, comando_convertitore
-from assistente.config import ErroreConfigurazione, carica_configurazione
-from assistente.grafo import costruisci_grafo, limite_ricorsione
-from assistente.modello import crea_modello, crea_revisore, crea_riassuntore, crea_router
-from assistente.note import ErroreArchivio, apri_archivio
-from assistente.preferenze import carica_preferenze, predefinite
-from assistente.strumenti import crea_strumenti
+from assistente.cli import esegui_ciclo
+from assistente.client_agente import ErroreAgente, PromptRemoti, SessioneRemota
+
+URL_PREDEFINITO = "http://localhost:8100"
 
 
 def main() -> int:
-    try:
-        config = carica_configurazione()
-    except ErroreConfigurazione as errore:
-        print(errore, file=sys.stderr)
-        return 2
-
     logging.basicConfig(
-        level=config.log_level,
+        level=(os.environ.get("LOG_LEVEL", "").strip() or "INFO").upper(),
         stream=sys.stderr,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpx2").setLevel(logging.WARNING)
-
-    # Prima del server MCP: con un catalogo non valido non resta nessun sottoprocesso da chiudere.
+    url = (os.environ.get("AGENTE_URL", "").strip() or URL_PREDEFINITO).rstrip("/")
+    sessione = SessioneRemota(url)
     try:
-        catalogo = carica_catalogo()
-    except ErroreCatalogo as errore:
-        print(f"Catalogo non valido: {errore}", file=sys.stderr)
-        return 4
-
-    # Anche l'archivio prima del server MCP, per lo stesso motivo.
-    try:
-        archivio = apri_archivio(config.percorso_db_note, config.fuso_predefinito)
-    except ErroreArchivio as errore:
-        print(f"Archivio note non disponibile: {errore}", file=sys.stderr)
-        return 5
-    try:
-        return _avvia(config, catalogo, archivio)
-    finally:
-        archivio.chiudi()
-
-
-def _avvia(config, catalogo, archivio) -> int:
-    client_mcp = ClientMCP(
-        *comando_convertitore(), ambiente={"PERCORSO_PREFERENZE": config.percorso_preferenze}
-    )
-    try:
-        client_mcp.avvia()
-    except ErroreMCP as errore:
-        print(f"Server MCP del convertitore non avviato: {errore}", file=sys.stderr)
-        return 3
-    except KeyboardInterrupt:
-        client_mcp.chiudi()
-        print("Arrivederci.")
-        return 130
-
-    # Il try/finally chiude il server MCP anche con Ctrl+C o errori imprevisti.
-    try:
-        # Resource: la legge l'host una volta, prima della prima domanda (non è uno strumento).
-        preferenze = carica_preferenze(client_mcp, predefinite(config.fuso_predefinito))
-        strumenti = (
-            crea_strumenti(catalogo=catalogo, archivio=archivio)
-            + client_mcp.strumenti()
-            + crea_strumenti_api(config.scadenze_api_url)
-        )
-        modello = crea_modello(config, strumenti)
-        grafo = costruisci_grafo(
-            modello,
-            strumenti,
-            config.fuso_predefinito,
-            config.max_passaggi_strumenti,
-            archivio=archivio,
-            router=crea_router(config),
-            ambito=config.ambito,
-            revisore=crea_revisore(config),
-            max_revisioni=config.max_revisioni,
-            riassuntore=crea_riassuntore(config),
-            soglia_riassunto=config.soglia_riassunto,
-            messaggi_conservati=config.messaggi_conservati,
-            preferenze=preferenze,
-        )
-        sessione = Sessione(
-            grafo, limite_ricorsione(config.max_passaggi_strumenti, config.max_revisioni)
-        )
-
-        print(f"Assistente del laboratorio (modello: {config.modello}). Scrivi /esci per uscire.")
-        esegui_ciclo(sessione, config.base_url, prompt=client_mcp)
-    finally:
-        client_mcp.chiudi()
+        stato = sessione.stato()
+    except ErroreAgente as errore:
+        print(f"Attenzione: {errore}. Avviarlo con python -m assistente.servizio.")
+    else:
+        if stato.get("modello") != "ok" or stato.get("server_mcp") != "ok":
+            print(f"Attenzione: stato dell'agente {stato}")
+    print(f"Assistente del laboratorio (agente: {url}). Scrivi /esci o /prompts per i comandi.")
+    esegui_ciclo(sessione, url, prompt=PromptRemoti(url))
     return 0
 
 

@@ -18,6 +18,10 @@ Gli strumenti sono collegati con tre meccanismi diversi, per confrontarli:
 
 Per il modello sono tutti normali strumenti: cambia solo dove viene eseguito il codice.
 
+Prima dell'agente un router classifica ogni domanda come `conversazione` o `fuori_ambito`
+rispetto all'ambito scritto in `AMBITO_AGENTE`: le domande fuori ambito ricevono un rifiuto
+senza che l'agente venga eseguito.
+
 I comandi sono PowerShell (Windows) e vanno lanciati dalla cartella `lezione_4/`.
 
 ## Requisiti
@@ -45,6 +49,12 @@ Il file `.env` non va in Git. Le variabili sono:
 | `SCADENZE_API_PORTA` | no | `8000` (porta del servizio `scadenze_api`) |
 | `SCADENZE_API_HOST` | no | `127.0.0.1` (solo questo computer); in Docker `0.0.0.0` (da `docker-compose.yml`) |
 | `PERCORSO_DB_NOTE` | no | `note.sqlite3`; in Docker `/app/note/note.sqlite3`, sul volume `note` (da `docker-compose.yml`) |
+| `AMBITO_AGENTE` | sì | il testo di `.env.example` (strumenti del laboratorio, temi del corso, saluti) |
+
+`AMBITO_AGENTE` descrive in una riga, senza virgolette, di che cosa si occupa l'assistente. Il router
+la usa per decidere se una domanda è in ambito e il messaggio di rifiuto la riporta all'utente.
+Per accettare nuovi argomenti si cambia questa variabile, non il codice. Se manca, l'avvio si ferma
+con codice di uscita 2.
 
 L'identificativo del modello è quello restituito dal server:
 
@@ -153,7 +163,16 @@ Prova reale con LM Studio, attivata esplicitamente (richiede il server e `.env` 
 .\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -v -s
 ```
 
-La prova reale fa una domanda per ogni strumento (ora, calcolo, conversione, giorni lavorativi),
+Solo le prove reali del router (domanda in ambito con strumento, fuori ambito, tema del corso,
+domanda di seguito), 4 test, circa 6 minuti:
+
+```powershell
+.\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -k router -v -s
+```
+
+Verificate con `google/gemma-4-e2b`: 4 superati su 4.
+
+La prova reale completa fa anche una domanda per ogni strumento (ora, calcolo, conversione, giorni lavorativi),
 una conversione impossibile, cinque domande sul catalogo (ricerca, dettaglio, ricerca seguita da
 dettaglio, nessun risultato, codice inesistente) e sei sulle note (aggiunta, ricerca, elenco,
 nessun risultato, eliminazione confermata, eliminazione annullata), in tutto 16 test; avvia da sola
@@ -283,24 +302,42 @@ modello non chiama lo strumento: per provare l'errore serve una richiesta esplic
     input da pipe (aggiunta, ritrovata in una seconda sessione, eliminazione con conferma);
     **da verificare a mano** la sessione interattiva con la conferma, in locale e in Docker con TTY,
     compreso Ctrl+C durante `Conferma>`.
+11. Router, con `LOG_LEVEL=INFO`: «Che ore sono a Tokyo?» produce nei log `router: categoria=conversazione
+    ... -> agente`, poi `agente: chiamata al modello` e la chiamata a `ora_corrente`; «Dammi la ricetta
+    della carbonara» produce `router: categoria=fuori_ambito ... -> rifiuto` e `rifiuto: domanda fuori
+    ambito, agente non eseguito`, senza nessuna riga `agente:`, e la risposta elenca l'ambito.
+    Verificata in locale con
+    `"Che ore sono a Tokyo?", "Dammi la ricetta della carbonara", "/esci" | .\.venv\Scripts\python -m assistente`
+    (servizio `scadenze_api` avviato in un'altra finestra); da verificare in Docker.
 
 ## Struttura del grafo
 
 ```mermaid
 flowchart TD
-    START([START]) --> modello
-    modello -->|nessuna chiamata a strumento| END([END])
-    modello -->|chiamate e passaggi sotto il limite| strumenti
-    modello -->|chiamata a elimina_nota, sotto il limite| conferma_eliminazione
-    modello -->|chiamate e limite raggiunto| limite_raggiunto
+    START([START]) --> router
+    router -->|conversazione| agente
+    router -->|fuori_ambito| rifiuto
+    rifiuto --> END([END])
+    agente -->|nessuna chiamata a strumento| END
+    agente -->|chiamate e passaggi sotto il limite| strumenti
+    agente -->|chiamata a elimina_nota, sotto il limite| conferma_eliminazione
+    agente -->|chiamate e limite raggiunto| limite_raggiunto
     conferma_eliminazione -->|sì / no dell'utente| strumenti
-    strumenti --> modello
+    strumenti --> agente
     limite_raggiunto --> END
 ```
 
-Lo stato ha `messages` (la cronologia), `passaggi_strumenti` (il contatore, azzerato a ogni domanda)
-ed `eliminazioni_confermate` (le chiamate a `elimina_nota` confermate dall'utente). Il limite è
-`MAX_PASSAGGI_STRUMENTI`. Il codice è in `assistente/grafo.py`.
+Lo stato ha `messages` (la cronologia), `passaggi_strumenti` (il contatore, azzerato a ogni domanda),
+`eliminazioni_confermate` (le chiamate a `elimina_nota` confermate dall'utente), `categoria` e
+`motivo` (la decisione del router per la domanda corrente). Il limite è `MAX_PASSAGGI_STRUMENTI`.
+Il codice è in `assistente/grafo.py`; prompt, schema della decisione e messaggio di rifiuto sono in
+`assistente/router.py`.
+
+`router` chiama lo stesso modello con output strutturato (`json_schema`): riceve l'ambito, gli ultimi
+turni della conversazione (solo domande e risposte finali, senza chiamate agli strumenti) e la domanda
+corrente, e restituisce `categoria` e `motivo`. Non sceglie gli strumenti: quello resta compito di
+`agente`. Se l'output non è valido la domanda passa comunque all'agente (fail-open), con un `WARNING`
+nei log. `rifiuto` risponde con un testo fisso che riporta l'ambito, senza chiamare il modello.
 
 `conferma_eliminazione` legge la nota dall'archivio e, se esiste, ferma il grafo con `interrupt()`;
 il terminale fa la domanda e riprende il grafo con `Command(resume=True/False)`. `strumenti` esegue
@@ -346,6 +383,17 @@ per gli altri anni il conteggio dei giorni lavorativi è rifiutato, quello di ca
 `.\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -v -s --log-cli-level=INFO`
 (`LOG_LEVEL` agisce solo sull'avvio dell'applicazione, non su pytest).
 Il comportamento dipende dal modello: solo la prova reale lo conferma.
+
+**Righe del router nei log** (con `LOG_LEVEL=INFO`):
+- `router: categoria=<categoria> motivo=<motivo> -> <agente|rifiuto>`: la decisione per la domanda;
+- `agente: chiamata al modello`: l'agente è stato eseguito (manca per le domande rifiutate);
+- `rifiuto: domanda fuori ambito, agente non eseguito`;
+- `WARNING ... router: output non valido (...), la domanda passa all'agente`: il modello non ha
+  restituito una decisione valida e la domanda è trattata come in ambito.
+
+**Una domanda valida viene rifiutata:** leggere il `motivo` nella riga `router:` e allargare
+`AMBITO_AGENTE` nel `.env` con l'argomento mancante, poi ricaricare `.env` e riavviare l'assistente.
+Il router dipende dal modello: una riformulazione della domanda può dare un esito diverso.
 
 **Variabile mancante:** l'avvio si ferma con «Variabile d'ambiente obbligatoria mancante o vuota: NOME».
 In locale caricare `.env` con la riga PowerShell della sezione Configurazione. In Docker verificare

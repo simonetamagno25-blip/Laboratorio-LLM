@@ -12,16 +12,16 @@ dell'eliminazione delle note, server MCP `convertitore_mcp` via stdio, servizio 
 `scadenze_api`), 305 test automatici verdi.
 
 ## Step 1 · Router: conversazione o fuori ambito (Base)
-- [ ] Specifica e piano approvati
-- [ ] Ambito dell'agente in configurazione, non nel codice
-- [ ] Nodo router con output strutturato: `categoria` (conversazione / fuori ambito) e `motivo`
-- [ ] Arco condizionale: conversazione → agente; fuori ambito → rifiuto → fine
-- [ ] Il router non valuta gli strumenti
+- [x] Specifica e piano approvati
+- [x] Ambito dell'agente in configurazione, non nel codice
+- [x] Nodo router con output strutturato: `categoria` (conversazione / fuori ambito) e `motivo`
+- [x] Arco condizionale: conversazione → agente; fuori ambito → rifiuto → fine
+- [x] Il router non valuta gli strumenti
 - Evidenze
-  - [ ] Domanda in ambito: log con categoria, motivo e passaggio all'agente
-  - [ ] Domanda fuori ambito: rifiuto, nessuna esecuzione del nodo agente nei log
-  - [ ] Test con risposte del router simulate per entrambi i percorsi
-- [ ] Prova reale con LM Studio · [ ] README · [ ] Commit
+  - [x] Domanda in ambito: log con categoria, motivo e passaggio all'agente
+  - [x] Domanda fuori ambito: rifiuto, nessuna esecuzione del nodo agente nei log
+  - [x] Test con risposte del router simulate per entrambi i percorsi
+- [x] Prova reale con LM Studio · [x] README · [x] Commit
 - **Evidenza minima:** domanda fuori ambito rifiutata senza passare dall'agente
 
 ## Step 2 · Revisore: la risposta è coerente con la domanda? (Intermedio)

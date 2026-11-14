@@ -1,3 +1,4 @@
+import pytest
 import httpx
 import openai
 from langchain_core.runnables import Runnable
@@ -51,3 +52,43 @@ def test_main_senza_configurazione(monkeypatch, capsys):
     monkeypatch.delenv("LMSTUDIO_MODEL", raising=False)
     assert main() == 2
     assert "LMSTUDIO_BASE_URL" in capsys.readouterr().err
+
+
+# --- Revisore: contratto con la libreria, con un server finto ---
+
+import json
+
+from langchain_core.messages import HumanMessage
+
+from assistente import modello as modulo_modello
+from assistente.revisore import DecisioneRevisore
+from tests.fakes import chat_con_server_finto, risposta_del_server
+
+
+def revisore_con_server(monkeypatch, contenuto, finish_reason="stop"):
+    chat = chat_con_server_finto(risposta_del_server(contenuto, finish_reason))
+    monkeypatch.setattr(modulo_modello, "_chat", lambda config: chat)
+    return modulo_modello.crea_revisore(CONFIG)
+
+
+def test_crea_revisore_output_valido(monkeypatch):
+    revisore = revisore_con_server(
+        monkeypatch, json.dumps({"coerente": False, "motivo": "manca il calcolo"})
+    )
+    esito = revisore.invoke([HumanMessage("x")])
+    assert esito["parsed"] == DecisioneRevisore(coerente=False, motivo="manca il calcolo")
+
+
+@pytest.mark.parametrize(
+    "contenuto, finish_reason",
+    [
+        (json.dumps({"coerente": "forse", "motivo": "x"}), "stop"),
+        ('{"coerente": tr', "stop"),
+        (json.dumps({"coerente": True, "motivo": "x"}), "length"),
+    ],
+)
+def test_crea_revisore_output_non_valido_non_solleva(monkeypatch, contenuto, finish_reason):
+    revisore = revisore_con_server(monkeypatch, contenuto, finish_reason)
+    esito = revisore.invoke([HumanMessage("x")])
+    assert esito["parsed"] is None
+    assert esito["parsing_error"] is not None

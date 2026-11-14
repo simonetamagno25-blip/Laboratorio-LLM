@@ -1,6 +1,8 @@
 """Modello finto condiviso dai test: risposte decise dal test, nessuna rete."""
 
+import httpx
 from langchain_core.messages import AIMessage, BaseMessage
+from langchain_openai import ChatOpenAI
 
 from assistente.router import DecisioneRouter
 
@@ -52,3 +54,33 @@ class RouterFinto:
             errore = ValueError("json non valido")
             return {"raw": AIMessage(""), "parsed": None, "parsing_error": errore}
         return {"raw": AIMessage(""), "parsed": decisione, "parsing_error": None}
+
+
+class RevisoreFinto(RouterFinto):
+    """Revisore simulato: ogni decisione è un DecisioneRevisore, None (output non valido) o
+    un'eccezione."""
+
+
+def risposta_del_server(contenuto: str, finish_reason: str = "stop"):
+    """Gestore per httpx.MockTransport: una risposta di chat completion con questo contenuto."""
+
+    def gestore(request):
+        corpo = {
+            "id": "x", "object": "chat.completion", "created": 0, "model": "m",
+            "choices": [{
+                "index": 0, "finish_reason": finish_reason,
+                "message": {"role": "assistant", "content": contenuto},
+            }],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+        }
+        return httpx.Response(200, json=corpo)
+
+    return gestore
+
+
+def chat_con_server_finto(gestore) -> ChatOpenAI:
+    """Un vero ChatOpenAI che parla con un server finto: nessuna rete, nessun modello."""
+    return ChatOpenAI(
+        base_url="http://server-finto/v1", model="m", api_key="k", max_retries=0,
+        http_client=httpx.Client(transport=httpx.MockTransport(gestore)),
+    )

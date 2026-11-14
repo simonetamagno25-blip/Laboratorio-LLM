@@ -25,6 +25,7 @@ class Configurazione:
     max_revisioni: int = 2
     soglia_riassunto: int = 20
     messaggi_conservati: int = 6
+    percorso_preferenze: str = "preferenze.json"
 
 
 def _obbligatoria(env: Mapping[str, str], nome: str) -> str:
@@ -82,6 +83,7 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
             f"MESSAGGI_CONSERVATI ({messaggi_conservati}) deve essere minore di "
             f"SOGLIA_RIASSUNTO ({soglia_riassunto})"
         )
+    percorso_preferenze = env.get("PERCORSO_PREFERENZE", "").strip() or "preferenze.json"
 
     return Configurazione(
         base_url,
@@ -95,4 +97,5 @@ def carica_configurazione(env: Mapping[str, str] | None = None) -> Configurazion
         max_revisioni,
         soglia_riassunto,
         messaggi_conservati,
+        percorso_preferenze,
     )

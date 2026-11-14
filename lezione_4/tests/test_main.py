@@ -166,3 +166,34 @@ def test_archivio_chiuso_a_fine_sessione(monkeypatch):
     monkeypatch.setattr(punto_di_ingresso, "esegui_ciclo", lambda sessione, base_url: None)
     assert punto_di_ingresso.main() == 0
     assert chiuso
+
+
+def test_avvio_legge_le_preferenze_dalla_resource(monkeypatch, tmp_path, caplog):
+    import json
+    import logging
+
+    for nome, valore in ENV.items():
+        monkeypatch.setenv(nome, valore)
+    file = tmp_path / "preferenze.json"
+    file.write_text(
+        json.dumps({"lingua": "inglese", "fuso_orario": "America/New_York", "stile": "dettagliato"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PERCORSO_PREFERENZE", str(file))
+    ricevute = []
+    originale = punto_di_ingresso.costruisci_grafo
+
+    def costruisci_e_registra(*args, **kwargs):
+        ricevute.append(kwargs.get("preferenze"))
+        return originale(*args, **kwargs)
+
+    monkeypatch.setattr(punto_di_ingresso, "costruisci_grafo", costruisci_e_registra)
+    monkeypatch.setattr(punto_di_ingresso, "crea_modello", lambda config, strumenti: object())
+    monkeypatch.setattr(punto_di_ingresso, "esegui_ciclo", lambda sessione, base_url: None)
+    caplog.set_level(logging.INFO)
+    assert punto_di_ingresso.main() == 0
+    assert ricevute[0].fuso_orario == "America/New_York"
+    assert ricevute[0].lingua == "inglese"
+    righe = [r.getMessage() for r in caplog.records]
+    assert any(r.startswith("resources/read utente://preferenze:") for r in righe)
+    assert "preferenze: lingua=inglese fuso_orario=America/New_York stile=dettagliato" in righe

@@ -11,6 +11,7 @@ from assistente.config import ErroreConfigurazione, carica_configurazione
 from assistente.grafo import costruisci_grafo, limite_ricorsione
 from assistente.modello import crea_modello, crea_revisore, crea_riassuntore, crea_router
 from assistente.note import ErroreArchivio, apri_archivio
+from assistente.preferenze import carica_preferenze, predefinite
 from assistente.strumenti import crea_strumenti
 
 
@@ -49,7 +50,9 @@ def main() -> int:
 
 
 def _avvia(config, catalogo, archivio) -> int:
-    client_mcp = ClientMCP(*comando_convertitore())
+    client_mcp = ClientMCP(
+        *comando_convertitore(), ambiente={"PERCORSO_PREFERENZE": config.percorso_preferenze}
+    )
     try:
         client_mcp.avvia()
     except ErroreMCP as errore:
@@ -62,6 +65,8 @@ def _avvia(config, catalogo, archivio) -> int:
 
     # Il try/finally chiude il server MCP anche con Ctrl+C o errori imprevisti.
     try:
+        # Resource: la legge l'host una volta, prima della prima domanda (non è uno strumento).
+        preferenze = carica_preferenze(client_mcp, predefinite(config.fuso_predefinito))
         strumenti = (
             crea_strumenti(catalogo=catalogo, archivio=archivio)
             + client_mcp.strumenti()
@@ -81,6 +86,7 @@ def _avvia(config, catalogo, archivio) -> int:
             riassuntore=crea_riassuntore(config),
             soglia_riassunto=config.soglia_riassunto,
             messaggi_conservati=config.messaggi_conservati,
+            preferenze=preferenze,
         )
         sessione = Sessione(
             grafo, limite_ricorsione(config.max_passaggi_strumenti, config.max_revisioni)

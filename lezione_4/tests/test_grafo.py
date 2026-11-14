@@ -888,3 +888,31 @@ def test_conferma_delle_note_non_riesegue_il_riassunto(archivio):
     )
     assert stato["messages"][-1].content == "Eliminata."
     assert len(riassuntore.chiamate) == 1
+
+
+# --- Preferenze ---
+
+from assistente.preferenze import Preferenze
+
+
+def test_preferenze_in_cima_al_prompt_di_sistema():
+    modello = ModelloFinto([AIMessage("ok")])
+    preferenze = Preferenze("inglese", "America/New_York", "dettagliato")
+    grafo = costruisci_grafo(
+        modello, crea_strumenti(AUTUNNO), "Europe/Rome", 3, preferenze=preferenze
+    )
+    invoca(grafo, "Che ore sono?")
+    sistema = modello.chiamate[0][0].content
+    assert sistema.startswith("Preferenze dell'utente")
+    # Il fuso e la lingua del prompt vengono dalle preferenze, non da FUSO_ORARIO_PREDEFINITO.
+    assert "usa il fuso orario America/New_York" in sistema
+    assert "Europe/Rome" not in sistema
+    assert sistema.endswith("Rispondi sempre in inglese.")
+
+
+def test_senza_preferenze_il_prompt_resta_quello_di_prima():
+    modello = ModelloFinto([AIMessage("ok")])
+    grafo = costruisci_grafo(modello, crea_strumenti(AUTUNNO), "Europe/Rome", 3)
+    invoca(grafo, "Ciao")
+    assert modello.chiamate[0][0].content == prompt_di_sistema("Europe/Rome")
+    assert prompt_di_sistema("Europe/Rome").endswith("Rispondi sempre in italiano.")

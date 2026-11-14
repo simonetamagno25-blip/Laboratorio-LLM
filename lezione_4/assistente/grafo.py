@@ -20,6 +20,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
 from assistente.note import ArchivioNote
+from assistente.preferenze import Preferenze, blocco_preferenze
 from assistente.riassunto import prompt_riassunto, punto_di_taglio, testo_da_riassumere
 from assistente.revisore import e_indicazione, indicazione, prompt_revisore, testo_da_revisionare
 from assistente.router import messaggio_rifiuto, prompt_router, testo_da_classificare
@@ -48,7 +49,7 @@ class StatoConversazione(TypedDict):
     riassunto: NotRequired[str]
 
 
-def prompt_di_sistema(fuso_predefinito: str) -> str:
+def prompt_di_sistema(fuso_predefinito: str, lingua: str = "italiano") -> str:
     return (
         "Sei l'assistente del laboratorio. "
         "Per qualsiasi domanda su data e ora usa sempre lo strumento ora_corrente "
@@ -75,7 +76,7 @@ def prompt_di_sistema(fuso_predefinito: str) -> str:
         "eliminare. Non citare note che gli strumenti non hanno restituito. "
         "Se uno strumento risponde con un errore, spiega all'utente il motivo "
         "senza inventare un risultato. "
-        "Rispondi sempre in italiano."
+        f"Rispondi sempre in {lingua}."
     )
 
 
@@ -132,8 +133,19 @@ def costruisci_grafo(
     riassuntore: Runnable | None = None,
     soglia_riassunto: int = 20,
     messaggi_conservati: int = 6,
+    preferenze: Preferenze | None = None,
 ) -> CompiledStateGraph:
     per_nome = {s.name: s for s in strumenti}
+    # Preferenze dell'utente (resource MCP letta dall'host): in cima al prompt di sistema; fuso e
+    # lingua sostituiscono quelli predefiniti.
+    if preferenze is None:
+        prompt_di_sistema_agente = prompt_di_sistema(fuso_predefinito)
+    else:
+        prompt_di_sistema_agente = (
+            blocco_preferenze(preferenze)
+            + "\n\n"
+            + prompt_di_sistema(preferenze.fuso_orario, preferenze.lingua)
+        )
     if router is not None and not ambito.strip():
         raise ValueError("il router richiede l'ambito dell'agente")
     if ELIMINA in per_nome and archivio is None:
@@ -267,7 +279,7 @@ def costruisci_grafo(
 
     def nodo_agente(stato: StatoConversazione) -> dict:
         log.info("agente: chiamata al modello")
-        sistema = prompt_di_sistema(fuso_predefinito)
+        sistema = prompt_di_sistema_agente
         if stato.get("riassunto"):
             # Gemma accetta un solo messaggio di sistema: il riassunto va in coda al prompt.
             sistema += "\n\nRiassunto della conversazione precedente: " + stato["riassunto"]

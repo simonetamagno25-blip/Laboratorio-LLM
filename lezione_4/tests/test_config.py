@@ -125,3 +125,9 @@ def test_messaggi_conservati_minori_della_soglia(conservati):
     env = {**BASE, "SOGLIA_RIASSUNTO": "8", "MESSAGGI_CONSERVATI": conservati}
     with pytest.raises(ErroreConfigurazione, match="MESSAGGI_CONSERVATI"):
         carica_configurazione(env)
+
+
+def test_percorso_preferenze():
+    assert carica_configurazione(BASE).percorso_preferenze == "preferenze.json"
+    env = {**BASE, "PERCORSO_PREFERENZE": " C:/x/pref.json "}
+    assert carica_configurazione(env).percorso_preferenze == "C:/x/pref.json"

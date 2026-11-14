@@ -70,46 +70,37 @@ Righe di log usate come evidenza:
   - conferma delle note con il router davanti: la ripresa non riesegue il router;
   - errore del router a metà sessione: la cronologia resta intatta;
   - all'avvio il grafo ha davvero il nodo `router`.
-- **Prove reali con LM Studio: non eseguite.** LM Studio era spento: connessione rifiutata su
-  `127.0.0.1:1234`.
+- Prove reali con LM Studio (`google/gemma-4-e2b`), `-k router`: **4 passate su 4**, eseguite due
+  volte (prima e dopo la correzione del fail-open).
+- Prova manuale con `LOG_LEVEL=INFO` e `scadenze_api` avviato: Tokyo → `router ... -> agente`,
+  `agente:`, `ora_corrente` con `Asia/Tokyo`; carbonara → `router ... -> rifiuto`, `rifiuto:`,
+  nessuna riga `agente:`; testo del rifiuto senza virgolette.
 
-## Lavoro non committato
-- `tests/test_lmstudio.py`:
-  - `grafo_completo` passa ora router e ambito;
-  - 4 nuovi test: `test_router_in_ambito_con_strumento`, `test_router_fuori_ambito`,
-    `test_router_tema_del_corso`, `test_router_follow_up`.
+## Commit successivi (sessione del 2026-11-14, pomeriggio)
+7. `ba8ebae` test(router): prove reali con LM Studio dei due percorsi.
+8. `ce67c0f` docs: router e ambito dell'agente nel README e roadmap (step 1 spuntato).
+9. `071e9e4` fix(router): fail-open anche per JSON fuori schema, troncato o interrotto.
+   - Rilievo della revisione finale: con `json_schema` l'SDK openai solleva `ValidationError` o
+     `LengthFinishReasonError` invece di restituire `parsed=None`. `crea_router` ora li intercetta;
+     connessione ed errori del server si propagano.
+   - Test di contratto con il vero `crea_router` e `httpx.MockTransport`; il test sul limite di
+     ricorsione verifica il caso peggiore (router + conferma) invece di un numero.
+   - Suite: **331 passati, 21 saltati**.
 
-  Va committato (`test(router): prove reali con LM Studio dei due percorsi`) solo dopo averli
-  eseguiti con esito positivo.
+## Revisione finale del branch (da `66728a5` a `ce67c0f`)
+- Esito: «pronto con correzioni». Il rilievo importante 1 (fail-open) è corretto in `071e9e4`.
+- Rilievo importante 2, **in attesa di decisione dell'utente**: il prompt del router
+  (`assistente/router.py`) dice che le domande che proseguono i turni precedenti sono sempre
+  «conversazione», anche quando quei turni erano fuori ambito (carbonara → «e quella
+  dell'amatriciana?»). Tocca una regola della specifica.
+- Rilievi minori non corretti: `IndexError` di `testo_da_classificare` senza `HumanMessage` (non
+  raggiungibile da `Sessione`), README senza diagnosi di «json_schema non supportato», `import
+  logging` dentro un test reale, `ambito` ignorato senza `router`, a capo nel `motivo` che
+  spezzano la riga di log.
 
-## Da fare (resto del piano: Task 6 e 7, poi la revisione finale)
-1. Avviare LM Studio con `google/gemma-4-e2b` caricato e il server su `:1234`, poi caricare `.env`
-   nella sessione (comando nel CLAUDE.md).
-2. `.\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -k router -v -s` → atteso 4 PASS.
-   - Se `json_schema` non funziona con il modello, **fermarsi** e concordare con l'utente il passaggio
-     a `method="function_calling"`.
-   - Se il router sbaglia la categoria, valutare con l'utente la formulazione del prompt o
-     dell'ambito.
-3. Prova manuale con i log:
-   - avviare `.\.venv\Scripts\python -m scadenze_api` in un'altra finestra;
-   - `$env:LOG_LEVEL="INFO"`;
-   - `"Che ore sono a Tokyo?", "Dammi la ricetta della carbonara", "/esci" | .\.venv\Scripts\python -m assistente`.
-
-   Salvare l'output come evidenza e controllare che il testo del rifiuto non contenga virgolette.
-4. Commit dei test reali.
-5. Task 7:
-   - README: `AMBITO_AGENTE` in «Configurazione», diagramma mermaid con `router`/`agente`/`rifiuto`
-     e campi `categoria`/`motivo`, comando `-k router` in «Test», righe di log e «domanda valida
-     rifiutata → allargare `AMBITO_AGENTE`» in «Diagnosi», due domande in «Checklist manuale»;
-   - spuntare `docs/ROADMAP.md`;
-   - CLAUDE.md solo se serve.
-
-   Poi commit `docs: router e ambito dell'agente nel README e roadmap`.
-6. Revisione finale dell'intero branch: pacchetto da `git merge-base feat/note HEAD` a `HEAD`,
-   revisore indipendente, correzione dei rilievi importanti con TDD.
-7. Resoconto all'utente: cosa è stato eseguito e con quale esito, cosa resta da provare (suite reale
-   completa, 23–29 minuti, solo su richiesta; Docker) e come verificare le evidenze. Poi **fermarsi**
-   e aspettare il via per lo step 2.
+## Da fare
+- Decidere il rilievo 2; poi fermarsi e aspettare il via per lo step 2.
+- Ancora da provare: suite reale completa (23–29 minuti, solo su richiesta) e Docker con il router.
 
 ## Note
 - Registro di avanzamento (non versionato): `repo-lab-llm/.superpowers/sdd/2026-11-14-router/progress.md`.

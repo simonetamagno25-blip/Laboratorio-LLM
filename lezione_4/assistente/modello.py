@@ -19,7 +19,8 @@ def _chat(config: Configurazione) -> ChatOpenAI:
         api_key="lm-studio",
         temperature=0,
         max_retries=0,
-        timeout=120,
+        # Una risposta lunga (es. /prompt spiega) con il ragionamento del modello locale supera 120 s.
+        timeout=300,
     )
 
 

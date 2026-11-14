@@ -99,3 +99,8 @@ def test_crea_riassuntore_e_il_modello_senza_strumenti():
 
     riassuntore = modulo_modello.crea_riassuntore(CONFIG)
     assert isinstance(riassuntore, ChatOpenAI)
+
+
+def test_timeout_del_modello_abbastanza_lungo_per_le_spiegazioni():
+    # Prova reale: /prompt spiega con gemma-4-e2b superava i 120 secondi (ReadTimeout).
+    assert modulo_modello._chat(CONFIG).request_timeout >= 300

@@ -341,3 +341,26 @@ def test_errore_del_router_non_tocca_la_cronologia():
     with pytest.raises(RuntimeError):
         sessione.chiedi("Che ore sono?")
     assert len(sessione.cronologia) == 2
+
+
+# --- Revisore ---
+
+
+def test_revisore_nella_sessione_mostra_solo_la_risposta_finale_e_riparte_a_ogni_domanda():
+    from assistente.revisore import DecisioneRevisore, e_indicazione
+    from tests.fakes import RevisoreFinto
+
+    no = DecisioneRevisore(coerente=False, motivo="manca una parte")
+    si = DecisioneRevisore(coerente=True, motivo="completa")
+    revisore = RevisoreFinto([no, si, no, si])
+    modello = ModelloFinto(
+        [AIMessage("bozza 1"), AIMessage("finale 1"), AIMessage("bozza 2"), AIMessage("finale 2")]
+    )
+    grafo = costruisci_grafo(
+        modello, crea_strumenti(AUTUNNO), "Europe/Rome", 3, revisore=revisore, max_revisioni=1
+    )
+    sessione = Sessione(grafo, limite_ricorsione(3, 1))
+    assert sessione.chiedi("prima domanda") == "finale 1"
+    # Con max_revisioni=1 la seconda domanda può ancora tornare all'agente: il conteggio riparte.
+    assert sessione.chiedi("seconda domanda") == "finale 2"
+    assert sum(e_indicazione(m) for m in sessione.cronologia) == 2

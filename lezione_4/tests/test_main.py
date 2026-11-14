@@ -2,6 +2,8 @@ import sys
 
 import pytest
 
+from assistente.grafo import limite_ricorsione
+
 import assistente.__main__ as punto_di_ingresso
 from assistente.catalogo import ErroreCatalogo
 from tests.fakes import RouterFinto
@@ -43,9 +45,12 @@ def test_avvio_con_tutti_gli_strumenti(monkeypatch, capsys):
     grafi = []
     ambiti = []
 
+    limiti = []
+
     class SessioneFinta:
         def __init__(self, grafo, limite):
             grafi.append(grafo)
+            limiti.append(limite)
 
     def crea_modello_finto(config, strumenti):
         SessioneFinta.nomi_strumenti = [s.name for s in strumenti]
@@ -75,6 +80,8 @@ def test_avvio_con_tutti_gli_strumenti(monkeypatch, capsys):
     ]
     assert ambiti == ["ora e date"]
     assert "router" in grafi[0].get_graph().nodes
+    assert "revisore" in grafi[0].get_graph().nodes
+    assert limiti == [limite_ricorsione(3, 2)]
 
 
 def test_catalogo_non_valido_blocca_l_avvio(monkeypatch, capsys):

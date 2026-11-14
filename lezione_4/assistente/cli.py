@@ -74,6 +74,7 @@ class Sessione:
                 {
                     "messages": self.cronologia + [HumanMessage(testo)],
                     "passaggi_strumenti": 0,
+                    "revisioni": 0,
                     "eliminazioni_confermate": [],
                 },
                 self._config,

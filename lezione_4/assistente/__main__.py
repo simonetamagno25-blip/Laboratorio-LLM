@@ -9,7 +9,7 @@ from assistente.client_api import crea_strumenti_api
 from assistente.client_mcp import ClientMCP, ErroreMCP, comando_convertitore
 from assistente.config import ErroreConfigurazione, carica_configurazione
 from assistente.grafo import costruisci_grafo, limite_ricorsione
-from assistente.modello import crea_modello, crea_router
+from assistente.modello import crea_modello, crea_revisore, crea_router
 from assistente.note import ErroreArchivio, apri_archivio
 from assistente.strumenti import crea_strumenti
 
@@ -76,8 +76,12 @@ def _avvia(config, catalogo, archivio) -> int:
             archivio=archivio,
             router=crea_router(config),
             ambito=config.ambito,
+            revisore=crea_revisore(config),
+            max_revisioni=config.max_revisioni,
         )
-        sessione = Sessione(grafo, limite_ricorsione(config.max_passaggi_strumenti))
+        sessione = Sessione(
+            grafo, limite_ricorsione(config.max_passaggi_strumenti, config.max_revisioni)
+        )
 
         print(f"Assistente del laboratorio (modello: {config.modello}). Scrivi /esci per uscire.")
         esegui_ciclo(sessione, config.base_url)

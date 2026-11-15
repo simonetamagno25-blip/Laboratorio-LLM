@@ -232,6 +232,11 @@ def costruisci_grafo(
             # Il riassunto è un'ottimizzazione: se fallisce il turno prosegue senza comprimere.
             log.warning("riassunto: non riuscito (%s), cronologia invariata", errore)
             return {}
+        nuovo_riassunto = risposta.text.strip()
+        if not nuovo_riassunto:
+            # Senza testo i turni vecchi sparirebbero senza traccia: meglio non comprimere.
+            log.warning("riassunto: non riuscito (riassunto vuoto), cronologia invariata")
+            return {}
         log.info(
             "riassunto: %d messaggi prima, %d dopo (%d riassunti)",
             len(messaggi),
@@ -239,7 +244,7 @@ def costruisci_grafo(
             taglio,
         )
         return {
-            "riassunto": risposta.text.strip(),
+            "riassunto": nuovo_riassunto,
             "messages": [RemoveMessage(id=m.id) for m in vecchi],
         }
 

@@ -916,3 +916,15 @@ def test_senza_preferenze_il_prompt_resta_quello_di_prima():
     invoca(grafo, "Ciao")
     assert modello.chiamate[0][0].content == prompt_di_sistema("Europe/Rome")
     assert prompt_di_sistema("Europe/Rome").endswith("Rispondi sempre in italiano.")
+
+
+def test_riassunto_vuoto_lascia_la_cronologia_e_il_riassunto_precedente(caplog):
+    # Revisione: un riassunto vuoto cancellava i turni vecchi senza lasciarne traccia.
+    caplog.set_level(logging.INFO)
+    _, _, grafo = crea_con_riassunto(["   "], [AIMessage("ok")], soglia=4, conservati=2)
+    cronologia = storia(3)
+    stato = turno_con(grafo, cronologia, "domanda", riassunto="riassunto vecchio")
+    assert len(stato["messages"]) == len(cronologia) + 2
+    assert stato["riassunto"] == "riassunto vecchio"
+    avvisi = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(a.startswith("riassunto: non riuscito (riassunto vuoto)") for a in avvisi), avvisi

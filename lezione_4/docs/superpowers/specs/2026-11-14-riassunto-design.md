@@ -1,6 +1,6 @@
 # Step 3 · Riassunto della cronologia — specifica
 
-Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: `LLM_Lez_6.pdf`, step 3 (Avanzato).
+Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: PDF delle esercitazioni, step 3 (Avanzato).
 Parte dagli step 1 (router) e 2 (revisore) funzionanti.
 
 ## Intento

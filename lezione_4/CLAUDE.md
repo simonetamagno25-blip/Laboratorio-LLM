@@ -57,7 +57,7 @@ Un'applicazione da terminale in Python che conversa con un modello locale e:
 - Aggiornare questo file quando cambiano convenzioni stabili (struttura, comandi di test,
   regole di lavoro), non per annotare l'avanzamento.
 
-## Struttura (dalla lezione 6)
+## Struttura (agente, back-end e front-end)
 - `assistente/`: grafo (riassunto → router → agente ⇄ strumenti → revisore), agente HTTP
   (`assistente/servizio.py`, FastAPI) e CLI client (`python -m assistente`);
 - `convertitore_mcp/`: server MCP (tool `converti_unita`, resource `utente://preferenze`, prompt

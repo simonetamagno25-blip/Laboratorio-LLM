@@ -98,7 +98,7 @@ Get-Content .env | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Objec
 
 ## Avvio
 
-L'applicazione ha quattro componenti (lezione 6, step 6–9):
+L'applicazione ha quattro componenti (step 6–9 della roadmap):
 
 | Componente | Comando | Porta locale | Ruolo |
 |---|---|---|---|
@@ -248,7 +248,7 @@ Verificata con `google/gemma-4-e2b`: 15 test superati su 16. Le sei prove delle 
 modello cerca con `categoria=sensori` e poi non chiama `dettaglio_articolo`. Anche con temperatura 0
 il modello non risponde sempre allo stesso modo.
 
-Prove reali degli step 3–5 (lezione 6), verificate con `google/gemma-4-e2b`, tutte superate:
+Prove reali degli step 3–5, verificate con `google/gemma-4-e2b`, tutte superate:
 
 ```powershell
 .\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -k "riassunto or preferenze or prompt_" -v -s
@@ -268,7 +268,7 @@ Durante queste prove un'esecuzione è rimasta bloccata per ore: il modello non r
 revisore è andato in timeout; ripetuta da sola, la prova è passata.
 
 La prova reale completa (`-m lmstudio` senza `-k`) usa ora il grafo con router, revisore e
-preferenze; nella lezione 6 è stata eseguita solo a gruppi (comandi sopra), non tutta insieme.
+preferenze; finora è stata eseguita solo a gruppi (comandi sopra), non tutta insieme.
 
 Una risposta simulata nei test automatici non dimostra che il modello locale sappia usare lo strumento:
 solo la prova reale e le sessioni reali lo fanno.

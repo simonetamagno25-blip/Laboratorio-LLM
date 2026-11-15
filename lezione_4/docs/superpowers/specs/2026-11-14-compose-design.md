@@ -1,6 +1,6 @@
 # Step 9 · Docker Compose: un container per componente — specifica
 
-Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: `LLM_Lez_6.pdf`, step 9.
+Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: PDF delle esercitazioni, step 9.
 Parte dagli step 6–8 funzionanti.
 
 ## Intento

@@ -1,6 +1,6 @@
 # Step 7 · Back-end: API e salvataggio delle chat — specifica
 
-Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: `LLM_Lez_6.pdf`, step 7.
+Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: PDF delle esercitazioni, step 7.
 Parte dallo step 6 (agente come servizio HTTP) funzionante.
 
 ## Intento

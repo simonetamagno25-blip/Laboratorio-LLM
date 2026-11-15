@@ -1,4 +1,4 @@
-# Handoff — ripresa dopo la lezione 6
+# Handoff — ripresa dell'agente web
 
 Data: 2026-11-15 · Branch: `feat/agente-web` (57 commit sopra `feat/note`), inviato su
 `origin/feat/agente-web` su richiesta dell'utente. `main` e `dev` non toccati; nessuna PR né merge.
@@ -7,11 +7,11 @@ Il dettaglio di cosa è stato fatto, con le verifiche e la revisione finale, è 
 `handoff-2026-11-15-agente-web.md`. Questo file serve a riprendere il lavoro.
 
 ## Stato
-- Step 1–9 della lezione 6 completati e verificati (ROADMAP: tutto spuntato tranne lo streaming
+- Step 1–9 della roadmap completati e verificati (ROADMAP: tutto spuntato tranne lo streaming
   facoltativo).
 - Test automatici: 503 passati, 37 saltati (`.\.venv\Scripts\python -m pytest -q`); nel container
   stesso esito.
-- Albero di lavoro pulito; `LLM_Lez_6.pdf` resta fuori da Git di proposito.
+- Albero di lavoro pulito; il PDF delle esercitazioni resta fuori da Git di proposito.
 - `.env` locale (non versionato) contiene `AMBITO_AGENTE` aggiornato e `POSTGRES_*` con una password
   generata: chi riparte da un clone deve copiare `.env.example` e scegliere le proprie credenziali.
 - Alla chiusura della sessione lo stack Docker era attivo (`docker compose ps`: 4 servizi). Le chat

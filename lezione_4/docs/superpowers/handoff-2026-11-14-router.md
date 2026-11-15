@@ -1,11 +1,11 @@
-# Handoff — lezione 6, step 1: router
+# Handoff — step 1: router
 
 Data: 2026-11-14 · Branch: `feat/agente-web`, creato da `feat/note`, solo locale, niente push ·
 `main` e `dev` non toccati.
 
 ## Contesto
-- Esercitazioni della lezione 6 («Esercitazioni di laboratorio: evolvere l'agente»). La fonte di
-  verità è `LLM_Lez_6.pdf`, nella cartella `lezione_4/`, non versionato (6,5 MB).
+- Esercitazioni «Esercitazioni di laboratorio: evolvere l'agente». La fonte di
+  verità è il PDF delle esercitazioni, nella cartella `lezione_4/`, non versionato (6,5 MB).
 - Gli step vanno fatti uno alla volta, da 1 a 9. La checklist è in `docs/ROADMAP.md`.
 - Regole fissate dall'utente:
   - specifica e piano approvati prima del codice;

@@ -1,6 +1,6 @@
 # Step 6 · L'agente come servizio HTTP — specifica
 
-Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: `LLM_Lez_6.pdf`, step 6.
+Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: PDF delle esercitazioni, step 6.
 Parte dagli step 1–5 funzionanti.
 
 ## Intento

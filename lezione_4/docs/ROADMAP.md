@@ -1,6 +1,6 @@
-# Roadmap — Esercitazioni della lezione 6: evolvere l'agente
+# Roadmap — Esercitazioni: evolvere l'agente
 
-Fonte di verità: `LLM_Lez_6.pdf` («Esercitazioni di laboratorio: evolvere l'agente»).
+Fonte di verità: il PDF «Esercitazioni di laboratorio: evolvere l'agente» (non versionato).
 Uno step alla volta, nell'ordine; ogni step parte dal precedente funzionante, verificato
 con le evidenze richieste e registrato con un commit.
 

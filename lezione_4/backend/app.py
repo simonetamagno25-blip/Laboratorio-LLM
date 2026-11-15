@@ -11,7 +11,13 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-from backend.agente import AgenteNonRaggiungibile, ClientAgente, ErroreDellAgente
+from backend.agente import (
+    AgenteInRitardo,
+    AgenteNonRaggiungibile,
+    ClientAgente,
+    ConfermaScaduta,
+    ErroreDellAgente,
+)
 from backend.archivio import ErroreDatabase, StatoAgente
 
 log = logging.getLogger(__name__)
@@ -40,6 +46,7 @@ class ChatCompleta(BaseModel):
     titolo: str
     messaggi: list[MessaggioJSON] = Field(description="in ordine cronologico")
     conferma_in_attesa: bool
+    domanda_conferma: str | None = Field(None, description="testo della conferma in attesa")
 
 
 class NuovoMessaggio(BaseModel):
@@ -90,24 +97,29 @@ def crea_app(archivio, agente: ClientAgente, origini: list[str] | None = None) -
             raise HTTPException(404, f"chat {id_chat} inesistente")
         return stato
 
-    def chiama_agente(funzione):
+    def chiama_agente(funzione, esito: str):
+        # `esito` dice all'utente che cosa non è stato salvato (domanda o risposta alla conferma).
         try:
             return funzione()
         except AgenteNonRaggiungibile as errore:
             raise HTTPException(
-                503,
-                f"Agente non raggiungibile su {errore.args[0]}: la domanda non è stata salvata, "
-                "riprova quando l'agente è attivo.",
+                503, f"Agente non raggiungibile su {errore.args[0]}: {esito}, riprova "
+                "quando l'agente è attivo.",
+            ) from errore
+        except AgenteInRitardo as errore:
+            raise HTTPException(
+                504, f"L'agente non ha risposto in tempo: {esito}. Il turno potrebbe essere "
+                "stato completato lo stesso: ricarica la chat prima di riprovare.",
             ) from errore
         except ErroreDellAgente as errore:
-            raise HTTPException(
-                502, f"{errore} (la domanda non è stata salvata, riprova)"
-            ) from errore
+            raise HTTPException(502, f"{errore} ({esito}, riprova)") from errore
 
     def registra(id_chat: int, domanda: str | None, esito: dict, stato: StatoAgente) -> RispostaChat:
         if esito["tipo"] == "conferma":
             # La domanda resta salvata; la risposta arriverà dopo la conferma.
-            nuovo = StatoAgente(stato.cronologia, stato.riassunto, esito["id_conferma"])
+            nuovo = StatoAgente(
+                stato.cronologia, stato.riassunto, esito["id_conferma"], esito["domanda"]
+            )
             _db(lambda: archivio.salva_scambio(
                 id_chat, domanda=domanda, risposta=None, strumenti=[], stato=nuovo
             ))
@@ -157,6 +169,7 @@ def crea_app(archivio, agente: ClientAgente, origini: list[str] | None = None) -
             titolo=chat.titolo,
             messaggi=[MessaggioJSON(**vars(m)) for m in messaggi],
             conferma_in_attesa=bool(stato and stato.id_conferma),
+            domanda_conferma=stato.domanda_conferma if stato and stato.id_conferma else None,
         )
 
     @app.post(
@@ -171,7 +184,8 @@ def crea_app(archivio, agente: ClientAgente, origini: list[str] | None = None) -
             raise HTTPException(409, "c'è una conferma in attesa: rispondi prima sì o no")
         log.info("chat %d: domanda inoltrata all'agente", id_chat)
         esito = chiama_agente(
-            lambda: agente.invia(messaggio.testo, stato.cronologia, stato.riassunto)
+            lambda: agente.invia(messaggio.testo, stato.cronologia, stato.riassunto),
+            "la domanda non è stata salvata",
         )
         return registra(id_chat, messaggio.testo, esito, stato)
 
@@ -185,7 +199,24 @@ def crea_app(archivio, agente: ClientAgente, origini: list[str] | None = None) -
         stato = stato_della_chat(id_chat)
         if not stato.id_conferma:
             raise HTTPException(409, "nessuna conferma in attesa per questa chat")
-        esito = chiama_agente(lambda: agente.conferma(stato.id_conferma, risposta.conferma))
+        try:
+            esito = chiama_agente(
+                lambda: agente.conferma(stato.id_conferma, risposta.conferma),
+                "la risposta alla conferma non è stata registrata",
+            )
+        except ConfermaScaduta:
+            # L'agente non ha più il turno sospeso: si libera la chat invece di bloccarla.
+            libera = StatoAgente(stato.cronologia, stato.riassunto, None, None)
+            _db(lambda: archivio.salva_scambio(
+                id_chat, domanda=None, risposta=None, strumenti=[], stato=libera
+            ))
+            log.warning("chat %d: conferma scaduta, chat liberata", id_chat)
+            raise HTTPException(
+                409,
+                "La conferma non è più valida (l'agente è stato riavviato o la risposta è "
+                "fallita): ripeti la richiesta. Se l'eliminazione era già partita, controlla "
+                "con «Quali note ho?».",
+            ) from None
         return registra(id_chat, None, esito, stato)
 
     @app.delete(

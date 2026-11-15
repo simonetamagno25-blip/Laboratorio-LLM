@@ -153,3 +153,54 @@ def test_configurazione():
         carica({})
     with pytest.raises(ValueError, match="BACKEND_PORTA"):
         carica({"DATABASE_URL": "x", "BACKEND_PORTA": "0"})
+
+
+def test_conferma_scaduta_sblocca_la_chat():
+    # L'agente è stato riavviato (o la ripresa è fallita): non conosce più la conferma.
+    _, _, client = crea([
+        httpx.Response(200, json={"tipo": "conferma", "domanda": "Eliminare la nota 1?",
+                                  "id_conferma": "abc"}),
+        httpx.Response(404, json={"detail": "nessuna conferma in attesa con id abc"}),
+        risposta("Ecco le tue note."),
+    ])
+    id_chat = client.post("/api/chat").json()["id"]
+    client.post(f"/api/chat/{id_chat}/messaggi", json={"testo": "elimina la nota 1"})
+    r = client.post(f"/api/chat/{id_chat}/conferma", json={"conferma": True})
+    assert r.status_code == 409
+    assert "non è più valida" in r.json()["detail"]
+    assert client.get(f"/api/chat/{id_chat}").json()["conferma_in_attesa"] is False
+    # La chat è di nuovo utilizzabile.
+    r = client.post(f"/api/chat/{id_chat}/messaggi", json={"testo": "Quali note ho?"})
+    assert r.json()["risposta"] == "Ecco le tue note."
+
+
+def test_la_domanda_di_conferma_resta_dopo_il_ricaricamento():
+    _, _, client = crea([
+        httpx.Response(200, json={"tipo": "conferma", "domanda": "Eliminare la nota 1: \"cavi\"?",
+                                  "id_conferma": "abc"}),
+    ])
+    id_chat = client.post("/api/chat").json()["id"]
+    client.post(f"/api/chat/{id_chat}/messaggi", json={"testo": "elimina la nota 1"})
+    chat = client.get(f"/api/chat/{id_chat}").json()
+    assert chat["domanda_conferma"] == "Eliminare la nota 1: \"cavi\"?"
+
+
+def test_errore_su_conferma_non_parla_di_domanda_non_salvata():
+    _, _, client = crea([
+        httpx.Response(200, json={"tipo": "conferma", "domanda": "Eliminare?", "id_conferma": "abc"}),
+        httpx.Response(503, json={"detail": "LM Studio non raggiungibile su x"}),
+    ])
+    id_chat = client.post("/api/chat").json()["id"]
+    client.post(f"/api/chat/{id_chat}/messaggi", json={"testo": "elimina la nota 1"})
+    r = client.post(f"/api/chat/{id_chat}/conferma", json={"conferma": True})
+    assert r.status_code == 502
+    assert "domanda non è stata salvata" not in r.json()["detail"]
+
+
+def test_timeout_dell_agente_non_e_agente_spento():
+    _, _, client = crea([httpx.ReadTimeout("lento")])
+    id_chat = client.post("/api/chat").json()["id"]
+    r = client.post(f"/api/chat/{id_chat}/messaggi", json={"testo": "Ciao"})
+    assert r.status_code == 504
+    assert "non ha risposto in tempo" in r.json()["detail"]
+    assert "non raggiungibile" not in r.json()["detail"]

@@ -128,3 +128,12 @@ def test_postgres_non_raggiungibile():
 )
 def test_titolo_da(domanda, titolo):
     assert titolo_da(domanda) == titolo
+
+
+def test_domanda_di_conferma_salvata(archivio):
+    chat = archivio.crea()
+    archivio.salva_scambio(
+        chat.id, domanda="elimina la nota", risposta=None, strumenti=[],
+        stato=StatoAgente([], "", "id-1", "Eliminare la nota 1?"),
+    )
+    assert archivio.stato_agente(chat.id).domanda_conferma == "Eliminare la nota 1?"

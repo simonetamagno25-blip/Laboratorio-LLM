@@ -7,6 +7,18 @@
             "title": "Conferma In Attesa",
             "type": "boolean"
           },
+          "domanda_conferma": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "testo della conferma in attesa",
+            "title": "Domanda Conferma"
+          },
           "id": {
             "title": "Id",
             "type": "integer"

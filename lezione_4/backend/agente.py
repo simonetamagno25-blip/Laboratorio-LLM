@@ -14,6 +14,14 @@ class AgenteNonRaggiungibile(RuntimeError):
     pass
 
 
+class AgenteInRitardo(RuntimeError):
+    """L'agente non ha risposto entro il timeout: potrebbe aver completato il turno lo stesso."""
+
+
+class ConfermaScaduta(RuntimeError):
+    """L'agente non conosce più la conferma (riavviato, o ripresa del turno già tentata)."""
+
+
 class ErroreDellAgente(RuntimeError):
     """L'agente ha risposto con un errore (es. LM Studio spento); il messaggio è già leggibile."""
 
@@ -26,9 +34,14 @@ class ClientAgente:
     def _post(self, percorso: str, corpo: dict) -> dict:
         try:
             risposta = self._http.post(percorso, json=corpo)
+        except httpx.TimeoutException as errore:
+            log.warning("agente in ritardo su %s: %r", self.url, errore)
+            raise AgenteInRitardo(self.url) from errore
         except httpx.TransportError as errore:
             log.warning("agente non raggiungibile su %s: %r", self.url, errore)
             raise AgenteNonRaggiungibile(self.url) from errore
+        if risposta.status_code == 404 and percorso == "/conferma":
+            raise ConfermaScaduta(self.url)
         if risposta.is_error:
             try:
                 dettaglio = risposta.json().get("detail")

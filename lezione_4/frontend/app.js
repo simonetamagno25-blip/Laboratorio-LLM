@@ -97,7 +97,7 @@ async function apriChat(id) {
   $("chat").hidden = false;
   $("titolo-chat").textContent = chat.titolo;
   $("messaggi").replaceChildren(...chat.messaggi.map(elementoMessaggio));
-  mostraConferma(chat.conferma_in_attesa ? "C'è un'eliminazione da confermare: confermi?" : null);
+  mostraConferma(chat.conferma_in_attesa ? chat.domanda_conferma || "C'è un'eliminazione da confermare: confermi?" : null);
   $("messaggi").lastElementChild?.scrollIntoView({ block: "end" });
   await aggiornaElenco();
   $("domanda").focus();

@@ -42,6 +42,8 @@ class StatoAgente:
     cronologia: list[dict]
     riassunto: str
     id_conferma: str | None
+    # Testo della conferma in attesa: serve all'interfaccia dopo un ricaricamento della pagina.
+    domanda_conferma: str | None = None
 
 
 def titolo_da(domanda: str) -> str:
@@ -135,6 +137,7 @@ CREATE TABLE IF NOT EXISTS messaggio (
     creato TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 CREATE INDEX IF NOT EXISTS messaggio_chat ON messaggio (chat_id, id);
+ALTER TABLE chat ADD COLUMN IF NOT EXISTS domanda_conferma TEXT;
 """
 
 _ELENCO = """
@@ -209,7 +212,8 @@ class ArchivioPostgres:
     def stato_agente(self, id_chat: int) -> StatoAgente | None:
         with self._connetti() as conn:
             riga = conn.execute(
-                "SELECT cronologia_agente, riassunto, id_conferma FROM chat WHERE id = %s",
+                "SELECT cronologia_agente, riassunto, id_conferma, domanda_conferma "
+                "FROM chat WHERE id = %s",
                 (id_chat,),
             ).fetchone()
         return StatoAgente(*riga) if riga else None
@@ -243,9 +247,10 @@ class ArchivioPostgres:
                     (id_chat, risposta, Jsonb(strumenti)),
                 )
             conn.execute(
-                "UPDATE chat SET cronologia_agente = %s, riassunto = %s, id_conferma = %s "
-                "WHERE id = %s",
-                (Jsonb(stato.cronologia), stato.riassunto, stato.id_conferma, id_chat),
+                "UPDATE chat SET cronologia_agente = %s, riassunto = %s, id_conferma = %s, "
+                "domanda_conferma = %s WHERE id = %s",
+                (Jsonb(stato.cronologia), stato.riassunto, stato.id_conferma,
+                 stato.domanda_conferma, id_chat),
             )
 
     def elimina(self, id_chat: int) -> bool:

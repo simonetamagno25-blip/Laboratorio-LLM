@@ -1,9 +1,10 @@
 # Assistente del laboratorio
 
-Applicazione da terminale in Python che conversa con un modello locale servito da LM Studio.
-Il flusso è un grafo LangGraph esplicito. Il modello chiede gli strumenti con il tool calling e il
-programma li esegue davvero. La cronologia dura quanto la sessione; le note personali invece
-restano salvate in un file SQLite.
+Assistente del laboratorio che conversa con un modello locale servito da LM Studio, usabile dal
+terminale o dal browser. Il flusso è un grafo LangGraph esplicito. Il modello chiede gli strumenti con
+il tool calling e il programma li esegue davvero. L'agente è un servizio HTTP senza stato; la CLI e il
+back-end (che salva le chat in PostgreSQL per il front-end) gli passano la cronologia a ogni turno.
+Le note personali restano salvate in un file SQLite.
 
 Gli strumenti sono collegati con tre meccanismi diversi, per confrontarli:
 
@@ -22,7 +23,9 @@ Prima dell'agente un router classifica ogni domanda come `conversazione` o `fuor
 rispetto all'ambito scritto in `AMBITO_AGENTE`: le domande fuori ambito ricevono un rifiuto
 senza che l'agente venga eseguito. Dopo la risposta finale dell'agente un revisore controlla che
 risponda a tutte le parti della domanda: se non è coerente la rimanda all'agente con il motivo, al
-massimo `MAX_REVISIONI` volte.
+massimo `MAX_REVISIONI` volte. All'inizio del turno, oltre `SOGLIA_RIASSUNTO` messaggi, i turni vecchi
+sono sostituiti da un riassunto. Le preferenze dell'utente (lingua, fuso orario, stile) arrivano da
+una resource MCP e i prompt MCP si richiamano dalla CLI con `/prompt`.
 
 I comandi sono PowerShell (Windows) e vanno lanciati dalla cartella `lezione_4/`.
 
@@ -30,7 +33,8 @@ I comandi sono PowerShell (Windows) e vanno lanciati dalla cartella `lezione_4/`
 
 - LM Studio con il modello `google/gemma-4-e2b` caricato e il server avviato (porta 1234).
 - Python, usato con `py` (verificato con 3.14).
-- Docker Desktop, per l'avvio con Compose.
+- Docker Desktop, per l'avvio con Compose (e, in locale, per un PostgreSQL di prova).
+- Node.js (facoltativo): esegue i test JavaScript del front-end; senza, quel test è saltato.
 
 ## Configurazione
 
@@ -47,17 +51,28 @@ Il file `.env` non va in Git. Le variabili sono:
 | `FUSO_ORARIO_PREDEFINITO` | no | `Europe/Rome` |
 | `MAX_PASSAGGI_STRUMENTI` | no | `3` |
 | `LOG_LEVEL` | no | `INFO` (valori: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
-| `SCADENZE_API_URL` | sì | in locale `http://localhost:8000`; in Docker `http://scadenze:8000` (da `docker-compose.yml`) |
+| `SCADENZE_API_URL` | sì | in locale `http://localhost:8000`; in Docker il servizio gira nel container dell'agente (`SCADENZE_INTERNO=1`, da `compose.yaml`) |
 | `SCADENZE_API_PORTA` | no | `8000` (porta del servizio `scadenze_api`) |
-| `SCADENZE_API_HOST` | no | `127.0.0.1` (solo questo computer); in Docker `0.0.0.0` (da `docker-compose.yml`) |
-| `PERCORSO_DB_NOTE` | no | `note.sqlite3`; in Docker `/app/note/note.sqlite3`, sul volume `note` (da `docker-compose.yml`) |
+| `SCADENZE_API_HOST` | no | `127.0.0.1` (solo questo computer) |
+| `PERCORSO_DB_NOTE` | no | `note.sqlite3`; in Docker `/app/note/note.sqlite3`, sul volume `note` (da `compose.yaml`) |
 | `MAX_REVISIONI` | no | `2` (quante volte il revisore può rimandare una risposta all'agente in un turno) |
+| `SOGLIA_RIASSUNTO` | no | `20` (oltre questo numero di messaggi si riassumono i turni vecchi) |
+| `MESSAGGI_CONSERVATI` | no | `6` (messaggi recenti conservati, minore della soglia) |
+| `PERCORSO_PREFERENZE` | no | `preferenze.json` (file della resource `utente://preferenze`, relativo alla cartella del progetto) |
+| `AGENTE_HOST`, `AGENTE_PORTA` | no | `127.0.0.1`, `8100` (servizio dell'agente; in Docker `0.0.0.0`) |
+| `AGENTE_URL` | no | `http://localhost:8100` (indirizzo dell'agente per la CLI e il back-end) |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | sì per Compose | credenziali di PostgreSQL in Docker; nel `.env`, mai in Git |
 | `AMBITO_AGENTE` | sì | il testo di `.env.example` (strumenti del laboratorio, temi del corso, saluti) |
 
 `AMBITO_AGENTE` descrive in una riga, senza virgolette, di che cosa si occupa l'assistente. Il router
 la usa per decidere se una domanda è in ambito e il messaggio di rifiuto la riporta all'utente.
 Per accettare nuovi argomenti si cambia questa variabile, non il codice. Se manca, l'avvio si ferma
 con codice di uscita 2.
+
+Back-end (`python -m backend`): `DATABASE_URL` (obbligatoria), `AGENTE_URL`, `BACKEND_HOST`
+(`127.0.0.1`), `BACKEND_PORTA` (`8200`), `ORIGINI_CONSENTITE` (`http://localhost:8300`, separate da
+virgola), `ATTESA_DATABASE` (secondi di attesa del database all'avvio, `30`). Front-end
+(`python -m frontend`): `BACKEND_URL` (`http://localhost:8200`), `FRONTEND_PORTA` (`8300`).
 
 L'identificativo del modello è quello restituito dal server:
 
@@ -83,68 +98,74 @@ Get-Content .env | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Objec
 
 ## Avvio
 
-In locale servono due finestre di PowerShell. Nella prima si avvia il servizio di giorni e scadenze
-(resta in ascolto finché non si preme Ctrl+C):
+L'applicazione ha quattro componenti (lezione 6, step 6–9):
+
+| Componente | Comando | Porta locale | Ruolo |
+|---|---|---|---|
+| Agente | `python -m assistente.servizio` | `8100` (`AGENTE_PORTA`) | grafo LangGraph, client MCP e strumenti; API HTTP senza stato, documentazione su `/docs` |
+| CLI | `python -m assistente` | — | client da terminale dell'API dell'agente (`AGENTE_URL`) |
+| Back-end | `python -m backend` | `8200` (`BACKEND_PORTA`) | chat in PostgreSQL, inoltro delle domande all'agente; documentazione su `/api/docs` |
+| Front-end | `python -m frontend` | `8300` (`FRONTEND_PORTA`) | interfaccia di chat nel browser; parla solo con il back-end (`BACKEND_URL`) |
+
+### Con Docker Compose (consigliato)
+
+Un solo comando avvia front-end, back-end, agente e PostgreSQL (`compose.yaml`); LM Studio resta
+sull'host. Servono le variabili `POSTGRES_USER`, `POSTGRES_PASSWORD` e `POSTGRES_DB` nel `.env`
+(vedi `.env.example`). Verificati:
 
 ```powershell
-.\.venv\Scripts\python -m scadenze_api
+docker compose up -d --build
+docker compose ps
 ```
 
-Nella seconda, dopo aver caricato `.env`:
+Poi si apre `http://localhost:8080` nel browser. È pubblicato solo il front-end (`8080`, modificabile
+con `FRONTEND_PORTA_HOST`): nginx serve l'interfaccia e inoltra `/api` al back-end; agente, back-end e
+database non hanno porte pubblicate. Il server MCP e il servizio delle scadenze girano nel container
+dell'agente. Le chat stanno nel volume `dati_postgres`, le note nel volume `note`:
+`docker compose down` li conserva, **`docker compose down -v` li cancella**. I log dell'agente, con le
+chiamate agli strumenti: `docker compose logs agente`.
 
-```powershell
-.\.venv\Scripts\python -m assistente
-```
-
-L'assistente avvia da solo il server MCP del convertitore e lo chiude all'uscita. Il server si può
-anche avviare a mano (`.\.venv\Scripts\python -m convertitore_mcp`), ma parla il protocollo MCP su
-stdin/stdout ed è pensato per essere lanciato da un client MCP. Se il servizio delle scadenze non è
-attivo l'assistente parte lo stesso e i relativi strumenti rispondono con un errore.
-
-Con Docker Compose (legge `.env` con `env_file` e imposta da solo gli indirizzi di LM Studio,
-`host.docker.internal`, e del servizio `scadenze`). Il servizio `scadenze` parte da solo come
-dipendenza dell'assistente; il server MCP gira dentro il container dell'assistente.
-Costruzione delle immagini e sessione con input da pipe, verificate:
-
-```powershell
-docker compose build
-"Quanto fa 2 + 2?", "Quanti centimetri sono 3 pollici?", "/esci" | docker compose run --rm -T assistente
-docker compose down
-```
-
-`docker compose down` ferma anche il servizio `scadenze`, che altrimenti resta attivo.
-
-Le note personali (vedi «Note personali») stanno nel volume Docker `note`, montato su `/app/note`
-(`PERCORSO_DB_NOTE=/app/note/note.sqlite3`, impostato da `docker-compose.yml`). Restano anche
-quando il container viene ricreato e dopo `docker compose down`; **`docker compose down -v` cancella
-il volume e con lui tutte le note**. Prova verificata con due sessioni separate:
-
-```powershell
-"Annota che il saldatore va pulito", "/esci" | docker compose run --rm -T assistente
-"Quali note ho?", "/esci" | docker compose run --rm -T assistente
-```
-
-Sessione interattiva con terminale (TTY), verificata a mano con una tastiera reale:
+La CLI in Docker (profilo `cli`, non parte con `up`) usa l'agente dello stack:
 
 ```powershell
 docker compose run --rm assistente
 ```
 
-Si esce con `/esci`, con Ctrl+C (anche durante una risposta) o chiudendo l'input: Ctrl+Z e Invio
-in PowerShell in locale, Ctrl+D nel container. Tutti verificati a mano, con un'eccezione: nel
-terminale integrato di VS Code Ctrl+Z non chiude l'input (vedi Diagnosi). Le chiamate agli strumenti
-compaiono nei log su stderr, per esempio `chiamata strumento ora_corrente con argomenti {...}`.
+### In locale (sviluppo)
 
-Dopo ogni domanda compare `(attendi: il modello sta rispondendo...)`: la risposta può richiedere
-decine di secondi, ed è meglio aspettare il prompt successivo (`Tu>` o `Conferma>`) prima di
-scrivere. Gli orari nei log del container sono in UTC; le date delle note usano
-`FUSO_ORARIO_PREDEFINITO`.
-
-Sessione locale con input da pipe (verificata):
+Ogni componente in una finestra di PowerShell, dopo aver caricato `.env`. Verificati:
 
 ```powershell
-"Che ore sono?", "E a New York?", "/esci" | .\.venv\Scripts\python -m assistente
+.\.venv\Scripts\python -m scadenze_api          # servizio di giorni e scadenze
+.\.venv\Scripts\python -m assistente.servizio   # agente (avvia da solo il server MCP)
+.\.venv\Scripts\python -m assistente            # CLI, client dell'agente
 ```
+
+Per il back-end serve un PostgreSQL raggiungibile: `DATABASE_URL`, per esempio
+`postgresql://utente:password@127.0.0.1:5432/chat` (va impostata nella finestra, non è in `.env.example`).
+Poi:
+
+```powershell
+.\.venv\Scripts\python -m backend    # usa AGENTE_URL (default http://localhost:8100)
+.\.venv\Scripts\python -m frontend   # usa BACKEND_URL (default http://localhost:8200)
+```
+
+e si apre `http://localhost:8300`. Il back-end accetta le chiamate del browser dalle origini in
+`ORIGINI_CONSENTITE` (default `http://localhost:8300`).
+
+Nella CLI, dopo ogni domanda compare `(attendi: il modello sta rispondendo...)`: una risposta può
+richiedere decine di secondi (router, agente, revisore e strumenti sono chiamate separate al modello).
+I comandi sono `/esci`, `/prompts` e `/prompt` (vedi «Prompt MCP»). Se l'agente non è attivo la CLI
+lo segnala all'avvio e a ogni domanda, e resta aperta.
+
+Sessione con input da pipe (verificata con l'agente locale):
+
+```powershell
+"/prompts", "/prompt spiega livello=base", "/esci" | .\.venv\Scripts\python -m assistente
+```
+
+Il secondo comando è rifiutato dalla CLI («Argomento obbligatorio mancante: argomento») senza
+chiamare il modello.
 
 ## Test
 
@@ -154,7 +175,28 @@ Suite normale, senza modello attivo (la prova reale risulta saltata):
 .\.venv\Scripts\python -m pytest -v
 ```
 
-Suite nel container:
+La suite comprende anche i test dell'API dell'agente e del back-end (con agente e archivio simulati),
+del front-end (contratto OpenAPI allineato, server statico) e, se Node.js è installato, i test
+JavaScript del front-end, eseguibili anche da soli:
+
+```powershell
+node --test frontend/test/front.test.mjs
+```
+
+Archivio delle chat su un PostgreSQL vero, attivato esplicitamente (verificato con un container
+`postgres:17.6-alpine` di prova; i dati del database indicato vengono cancellati a ogni test):
+
+```powershell
+docker run -d --name pg-test-lab -e POSTGRES_USER=lab -e POSTGRES_PASSWORD=lab -e POSTGRES_DB=lab_test -p 127.0.0.1:55432:5432 postgres:17.6-alpine
+$env:POSTGRES_TEST_URL = "postgresql://lab:lab@127.0.0.1:55432/lab_test"
+.\.venv\Scripts\python -m pytest tests/test_backend_archivio.py --postgres -v
+docker rm -f pg-test-lab
+```
+
+Verificato: 16 test superati, compreso «chat presenti dopo il riavvio» (nuova istanza, nuove
+connessioni).
+
+Suite nel container (immagine dell'agente, che contiene anche back-end e front-end per i test):
 
 ```powershell
 docker compose run --rm assistente python -m pytest -v
@@ -205,6 +247,28 @@ Verificata con `google/gemma-4-e2b`: 15 test superati su 16. Le sei prove delle 
 `test_catalogo_ricerca_poi_dettaglio` non è stabile (ripetuta tre volte passa due): quando fallisce il
 modello cerca con `categoria=sensori` e poi non chiama `dettaglio_articolo`. Anche con temperatura 0
 il modello non risponde sempre allo stesso modo.
+
+Prove reali degli step 3–5 (lezione 6), verificate con `google/gemma-4-e2b`, tutte superate:
+
+```powershell
+.\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -k "riassunto or preferenze or prompt_" -v -s
+```
+
+- `test_riassunto_conserva_il_nome`: soglia bassa (6 messaggi, 2 conservati); «Ciao, mi chiamo Giulia»,
+  poi due domande, poi «Come mi chiamo?» → «Ti chiami Giulia», con nei log
+  `riassunto: 7 messaggi prima, 5 dopo (2 riassunti)` e `riassunto: 9 messaggi prima, 5 dopo (4 riassunti)`.
+- `test_preferenze_fuso_predefinito_new_york`: con `fuso_orario=America/New_York` nel file,
+  «Che ore sono?» chiama `ora_corrente` con `America/New_York`.
+- `test_preferenze_lingua_inglese`: con `lingua=inglese` la risposta è in inglese.
+- `test_prompt_spiega_livello_base`: `/prompt spiega argomento="Model Context Protocol" livello=base`
+  passa dal router (`conversazione`) e dal revisore (`coerente=sì`).
+- `test_prompt_riassumi_conversazione`: dopo due domande il riassunto cita Tokyo e il calcolo.
+
+Durante queste prove un'esecuzione è rimasta bloccata per ore: il modello non rispondeva e il
+revisore è andato in timeout; ripetuta da sola, la prova è passata.
+
+La prova reale completa (`-m lmstudio` senza `-k`) usa ora il grafo con router, revisore e
+preferenze; nella lezione 6 è stata eseguita solo a gruppi (comandi sopra), non tutta insieme.
 
 Una risposta simulata nei test automatici non dimostra che il modello locale sappia usare lo strumento:
 solo la prova reale e le sessioni reali lo fanno.
@@ -291,10 +355,63 @@ Esempi di domande: «Avete sensori di temperatura?», «Dimmi tutto su SEN-004»
 umidità?», «Avete stampanti 3D?» (nessun risultato), «Dammi il dettaglio dell'articolo XYZ-999»
 (codice inesistente).
 
+## Prompt MCP
+
+Il server MCP espone due prompt, richiamati esplicitamente dall'utente dalla CLI:
+
+| Prompt | Argomenti |
+|---|---|
+| `spiega` | `argomento` (obbligatorio), `livello` (`base`, `intermedio`, `avanzato`; default `base`) |
+| `riassumi_conversazione` | `stile` (`sintetico`, `dettagliato`; default `sintetico`) |
+
+```text
+/prompts
+/prompt spiega argomento="Model Context Protocol" livello=base
+/prompt riassumi_conversazione stile=sintetico
+```
+
+`/prompts` mostra nome, descrizione e argomenti (da `prompts/list`). Con `/prompt` la CLI controlla
+gli argomenti rispetto a `prompts/list`: un argomento obbligatorio mancante o sconosciuto blocca la
+richiesta senza chiamare il modello. Un valore fuori elenco (per esempio `livello=esperto`) lo rifiuta
+il server («Prompt non disponibile: … Controlla nome e argomenti con /prompts»). I messaggi ottenuti
+(`prompts/get`) entrano nella cronologia e passano dal grafo come una domanda: riassunto, router,
+agente, strumenti e revisore. Nei log dell'agente: `prompts/get spiega {...}: 1 messaggi` e il testo
+del messaggio.
+
+## Servizi HTTP
+
+**Agente** (`python -m assistente.servizio`, documentazione OpenAPI su `http://localhost:8100/docs`):
+
+| Endpoint | Uso |
+|---|---|
+| `POST /conversazione` | `{messaggio, cronologia, riassunto}` → `{tipo, risposta, strumenti, cronologia, riassunto}` |
+| `POST /conferma` | `{id_conferma, conferma}`: risposta sì/no a un'eliminazione di nota (`tipo="conferma"`) |
+| `GET /stato` | agente, server MCP e modello raggiungibili (`503` se qualcosa non lo è) |
+| `GET /prompts`, `POST /prompts/{nome}` | `prompts/list` e `prompts/get` del server MCP |
+
+L'agente è senza stato: cronologia e riassunto arrivano dal chiamante e tornano aggiornati. Unica
+eccezione: un'eliminazione in attesa di conferma resta nell'agente finché non arriva la risposta.
+Errori: LM Studio non raggiungibile `503`, LM Studio in errore `502`, conferma sconosciuta `404`.
+
+**Back-end** (`python -m backend`, documentazione su `http://localhost:8200/api/docs`): `POST /api/chat`
+(crea), `GET /api/chat` (elenco con titolo e data dell'ultimo messaggio), `GET /api/chat/{id}`
+(messaggi in ordine), `POST /api/chat/{id}/messaggi` (domanda → agente → domanda e risposta salvate),
+`POST /api/chat/{id}/conferma`, `DELETE /api/chat/{id}`, `GET /api/stato`. Se l'agente non è
+raggiungibile risponde `503` e **non salva la domanda**: il front-end la lascia nel campo per riprovare.
+
+**Front-end:** le chiamate sono generate dal documento OpenAPI del back-end. Se il back-end cambia:
+
+```powershell
+.\.venv\Scripts\python -m frontend.genera_api
+```
+
 ## Checklist manuale
 
 Da eseguire in una sessione reale, in locale e in Docker, controllando anche i log. Le voci 1–9
-sono state verificate con `google/gemma-4-e2b`; la 10 in parte (vedi la voce). Per la voce 4 con una domanda generica su Marte il
+sono state verificate con `google/gemma-4-e2b`; la 10 in parte (vedi la voce). Le voci 1–11 sono state
+verificate con la CLI che eseguiva il grafo nello stesso processo; dallo step 6 la CLI è un client
+dell'agente HTTP: la logica del grafo è la stessa, ma **le voci 5–8 e 10 (errori, Ctrl+C, conferma
+interattiva) vanno riverificate con la CLI client**. Per la voce 4 con una domanda generica su Marte il
 modello non chiama lo strumento: per provare l'errore serve una richiesta esplicita, per esempio
 "Usa lo strumento ora_corrente con il fuso orario Marte/Base".
 
@@ -329,12 +446,36 @@ modello non chiama lo strumento: per provare l'errore serve una richiesta esplic
     Verificata in locale con
     `"Che ore sono a Tokyo?", "Dammi la ricetta della carbonara", "/esci" | .\.venv\Scripts\python -m assistente`
     (servizio `scadenze_api` avviato in un'altra finestra); da verificare in Docker.
+12. Revisore: una domanda in due parti con risposta parziale viene rimandata all'agente
+    (`revisore: coerente=no ... -> agente (revisione 1 di 2)`) e la risposta finale è completa.
+    Verificata con la prova reale; da verificare in una sessione interattiva.
+13. Riassunto: con `SOGLIA_RIASSUNTO` bassa (per esempio 6) il nome detto al primo turno è ancora
+    usato dopo la compressione. Verificata con la prova reale.
+14. Preferenze: modificando `preferenze.json` (fuso, lingua, stile) la sessione successiva ne tiene
+    conto senza cambiare il codice. Verificata con la prova reale (file temporaneo).
+15. Prompt: `/prompts`, `/prompt spiega ...`, argomenti mancanti o sconosciuti bloccati. Verificata
+    con la CLI client e con la prova reale.
+16. Stessa risposta da CLI e API: «Quanto fa 17 * 23?» con una chiamata HTTP a `POST /conversazione`
+    e dalla CLI dà la stessa risposta (391). Verificata in locale.
+17. Browser (Docker): nuova chat, «Ciao, mi chiamo Giulia. Che ore sono adesso a Tokyo?» → risposta
+    con `ora_corrente(fuso_orario=Asia/Tokyo)` sotto il messaggio; nei log dell'agente
+    `api: POST /conversazione`, `router: ...`, `chiamata strumento ora_corrente ...`, `revisore: ...`.
+    Verificata.
+18. Agente spento (`docker compose stop agente`): inviando una domanda il browser mostra «Agente non
+    raggiungibile su http://agente:8100: la domanda non è stata salvata…», la domanda resta nel campo e
+    l'interfaccia resta usabile. Verificata.
+19. Persistenza: dopo `docker compose down` e `docker compose up -d` la chat è ancora nell'elenco con i
+    suoi messaggi. Verificata.
+20. Eliminazione di una chat dal browser (conferma del browser) e conferma Sì/No di un'eliminazione
+    di nota dall'interfaccia: coperte dai test automatici, **da verificare a mano nel browser**.
 
 ## Struttura del grafo
 
 ```mermaid
 flowchart TD
-    START([START]) --> router
+    START([START]) --> riassunto
+    riassunto -->|sotto la soglia: nessuna chiamata| router
+    riassunto -->|sopra la soglia: turni vecchi riassunti| router
     router -->|conversazione| agente
     router -->|fuori_ambito| rifiuto
     rifiuto --> END([END])
@@ -352,7 +493,21 @@ flowchart TD
 Lo stato ha `messages` (la cronologia), `passaggi_strumenti` (il contatore, azzerato a ogni domanda),
 `eliminazioni_confermate` (le chiamate a `elimina_nota` confermate dall'utente), `categoria` e
 `motivo` (la decisione del router per la domanda corrente) e `revisioni` (le risposte rimandate
-all'agente dal revisore nel turno). I limiti sono `MAX_PASSAGGI_STRUMENTI` e `MAX_REVISIONI`.
+all'agente dal revisore nel turno) e `riassunto` (il riassunto dei turni tolti dalla cronologia). I
+limiti sono `MAX_PASSAGGI_STRUMENTI` e `MAX_REVISIONI`.
+
+`riassunto` lavora all'inizio di ogni turno. Sotto `SOGLIA_RIASSUNTO` messaggi non chiama il modello.
+Sopra la soglia sostituisce i turni più vecchi con un unico riassunto riscritto (unisce il riassunto
+precedente e i nuovi messaggi, non si accumula) e conserva almeno gli ultimi `MESSAGGI_CONSERVATI`
+messaggi. Taglia solo all'inizio di un turno, quindi non separa mai una richiesta di strumento dal suo
+`ToolMessage`. Il riassunto va in coda al prompt di sistema dell'agente. Se il modello non riesce a
+riassumere, il turno prosegue con la cronologia intera (`WARNING`).
+
+Le preferenze dell'utente sono una resource MCP (`utente://preferenze`, file `preferenze.json`):
+l'agente la legge una volta all'avvio, prima della prima domanda, e la mette in cima al prompt di
+sistema. Lingua e fuso orario sostituiscono quelli predefiniti. Non è uno strumento: il modello non
+la chiama e non compare tra i tool. Se non è disponibile si usano i valori predefiniti (`WARNING`).
+Modificando il file, la sessione successiva si comporta di conseguenza, senza cambiare il codice.
 Il codice è in `assistente/grafo.py`; prompt, schema della decisione e messaggio di rifiuto sono in
 `assistente/router.py`; quelli del revisore in `assistente/revisore.py`.
 
@@ -448,3 +603,27 @@ che `.env` esista. Ogni nuova finestra di PowerShell richiede di caricare di nuo
 **Ctrl+Z non chiude la sessione nel terminale di VS Code:** il terminale integrato non trasmette Ctrl+Z
 come fine dell'input, e il carattere arriva all'assistente come testo. Nella finestra di PowerShell
 normale Ctrl+Z e Invio funzionano. Nel terminale di VS Code usare `/esci` o Ctrl+C.
+
+**«LM Studio non ha risposto in tempo su …»:** il modello è occupato (per esempio da un'altra
+richiesta) o la risposta è molto lunga; il timeout per chiamata è di 300 secondi. Riprovare quando
+LM Studio è libero.
+
+**Righe del riassunto e delle preferenze nei log dell'agente:**
+- `riassunto: <n> messaggi prima, <m> dopo (<k> riassunti)`: compressione eseguita;
+- `WARNING ... riassunto: non riuscito (...), cronologia invariata`;
+- `resources/read utente://preferenze: <n> caratteri` e `preferenze: lingua=... fuso_orario=... stile=...`
+  all'avvio, prima di qualsiasi chiamata agli strumenti;
+- `WARNING ... preferenze: resource utente://preferenze non disponibile (...)` o `... non valido`:
+  si usano i valori predefiniti (per un campo non valido solo quel campo).
+
+**«Agente non raggiungibile su …»** (CLI o front-end): l'agente non è avviato o `AGENTE_URL` punta
+altrove. In locale: `.\.venv\Scripts\python -m assistente.servizio`; in Docker:
+`docker compose ps` e `docker compose logs agente`. Lo stato completo: `GET /stato` dell'agente o
+`GET /api/stato` del back-end (`http://localhost:8080/api/stato` con Docker).
+
+**Il back-end non parte («Database non disponibile»)** (codice di uscita 3): `DATABASE_URL` non è
+raggiungibile entro `ATTESA_DATABASE` secondi. In Docker controllare che il `.env` abbia
+`POSTGRES_USER`, `POSTGRES_PASSWORD` e `POSTGRES_DB`, e `docker compose logs database`.
+
+**Il front-end mostra «Back-end non raggiungibile»:** in locale `BACKEND_URL` deve puntare al
+back-end e il back-end deve consentire l'origine della pagina in `ORIGINI_CONSENTITE`.

@@ -7,6 +7,8 @@ con le evidenze richieste e registrato con un commit.
 Per ogni step: specifica e piano approvati → test automatici (modello simulato) →
 prova reale con LM Studio → README aggiornato → commit.
 
+Stato: step 1–9 completati il 2026-11-15 (dettagli e verifiche in `docs/superpowers/handoff-2026-11-15-lezione-6.md`).
+
 Punto di partenza: agente delle lezioni 4 e 5 (grafo `modello` ⇄ `strumenti`, conferma
 dell'eliminazione delle note, server MCP `convertitore_mcp` via stdio, servizio HTTP
 `scadenze_api`), 305 test automatici verdi.
@@ -38,98 +40,98 @@ dell'eliminazione delle note, server MCP `convertitore_mcp` via stdio, servizio 
 - **Evidenza minima:** risposta incompleta corretta dopo la revisione, entro il limite
 
 ## Step 3 · Riassunto della cronologia (Avanzato)
-- [ ] Specifica e piano approvati
-- [ ] Soglia configurabile (numero di messaggi o stima dei token)
-- [ ] Nodo riassunto all'inizio del turno: comprime i vecchi, conserva gli ultimi N
-- [ ] Il riassunto è un campo dello stato aggiornato, non accumulato
-- [ ] Il taglio non separa mai una richiesta di tool dal relativo `ToolMessage`
+- [x] Specifica e piano approvati
+- [x] Soglia configurabile (numero di messaggi o stima dei token)
+- [x] Nodo riassunto all'inizio del turno: comprime i vecchi, conserva gli ultimi N
+- [x] Il riassunto è un campo dello stato aggiornato, non accumulato
+- [x] Il taglio non separa mai una richiesta di tool dal relativo `ToolMessage`
 - Evidenze
-  - [ ] Log con numero di messaggi prima e dopo il riassunto
-  - [ ] Informazione del primo turno (es. nome dell'utente) usata dopo la compressione
-  - [ ] Sotto la soglia il nodo non chiama il modello
-- [ ] Prova reale con LM Studio · [ ] README · [ ] Commit
+  - [x] Log con numero di messaggi prima e dopo il riassunto
+  - [x] Informazione del primo turno (es. nome dell'utente) usata dopo la compressione
+  - [x] Sotto la soglia il nodo non chiama il modello
+- [x] Prova reale con LM Studio · [x] README · [x] Commit
 - **Evidenza minima:** informazione del primo turno ancora usata dopo la compressione
 
 ## Step 4 · Resource: preferenze dell'utente
-- [ ] Specifica e piano approvati
-- [ ] Resource `utente://preferenze`: lingua, fuso orario predefinito, stile (sintetico/dettagliato)
-- [ ] Letta dall'host a inizio sessione e messa in cima al prompt di sistema
-- [ ] La resource non compare tra i tool di `bind_tools`
-- [ ] Resource non disponibile: valori predefiniti, segnalati nei log
+- [x] Specifica e piano approvati
+- [x] Resource `utente://preferenze`: lingua, fuso orario predefinito, stile (sintetico/dettagliato)
+- [x] Letta dall'host a inizio sessione e messa in cima al prompt di sistema
+- [x] La resource non compare tra i tool di `bind_tools`
+- [x] Resource non disponibile: valori predefiniti, segnalati nei log
 - Evidenze
-  - [ ] «Che ore sono?» usa il fuso predefinito senza chiederlo (prova con America/New_York)
-  - [ ] Cambiando lingua o stile nel file, la sessione successiva risponde di conseguenza
-  - [ ] Lettura della resource nei log, separata dalle chiamate ai tool
-- [ ] Prova reale con LM Studio · [ ] README · [ ] Commit
+  - [x] «Che ore sono?» usa il fuso predefinito senza chiederlo (prova con America/New_York)
+  - [x] Cambiando lingua o stile nel file, la sessione successiva risponde di conseguenza
+  - [x] Lettura della resource nei log, separata dalle chiamate ai tool
+- [x] Prova reale con LM Studio · [x] README · [x] Commit
 - **Evidenza minima:** preferenze applicate; modifica del file senza modifica del codice
 
 ## Step 5 · Prompt: comandi riusabili nella CLI
-- [ ] Specifica e piano approvati
-- [ ] Prompt `spiega(argomento, livello)` e `riassumi_conversazione(stile)`
-- [ ] Comando `/prompts` con nome, descrizione e argomenti
-- [ ] Comando `/prompt nome argomento=valore`: messaggi aggiunti alla cronologia e inviati al grafo
-- [ ] Validazione rispetto a `prompts/list`: argomenti obbligatori mancanti o sconosciuti bloccano
+- [x] Specifica e piano approvati
+- [x] Prompt `spiega(argomento, livello)` e `riassumi_conversazione(stile)`
+- [x] Comando `/prompts` con nome, descrizione e argomenti
+- [x] Comando `/prompt nome argomento=valore`: messaggi aggiunti alla cronologia e inviati al grafo
+- [x] Validazione rispetto a `prompts/list`: argomenti obbligatori mancanti o sconosciuti bloccano
       la richiesta senza chiamare il modello
 - Evidenze
-  - [ ] `/prompt spiega argomento="Model Context Protocol" livello=base`: risposta adeguata al livello
-  - [ ] `riassumi_conversazione` riassume i turni della sessione corrente
-  - [ ] Log con prompt richiamato, argomenti e messaggi ottenuti dal server
-- [ ] Prova reale con LM Studio · [ ] README · [ ] Commit
+  - [x] `/prompt spiega argomento="Model Context Protocol" livello=base`: risposta adeguata al livello
+  - [x] `riassumi_conversazione` riassume i turni della sessione corrente
+  - [x] Log con prompt richiamato, argomenti e messaggi ottenuti dal server
+- [x] Prova reale con LM Studio · [x] README · [x] Commit
 - **Evidenza minima:** /prompts e /prompt funzionanti, con argomenti validati
 
 ## Step 6 · L'agente come servizio HTTP
-- [ ] Specifica e piano approvati
-- [ ] Modulo dell'agente separato dall'interfaccia; la CLI diventa client dell'API
-- [ ] Endpoint: messaggio e cronologia → risposta e strumenti usati
-- [ ] Endpoint di stato: agente, server MCP e modello raggiungibili
-- [ ] Agente senza stato: cronologia e riassunto arrivano dal chiamante e tornano aggiornati
+- [x] Specifica e piano approvati
+- [x] Modulo dell'agente separato dall'interfaccia; la CLI diventa client dell'API
+- [x] Endpoint: messaggio e cronologia → risposta e strumenti usati
+- [x] Endpoint di stato: agente, server MCP e modello raggiungibili
+- [x] Agente senza stato: cronologia e riassunto arrivano dal chiamante e tornano aggiornati
 - Evidenze
-  - [ ] Chiamata HTTP con una domanda che usa un tool: risposta e traccia nei log
-  - [ ] Modello o strumenti non disponibili: codice e messaggio di errore comprensibili
-  - [ ] Test dell'API con il grafo simulato; documentazione OpenAPI consultabile
-- [ ] Prova reale con LM Studio · [ ] README · [ ] Commit
+  - [x] Chiamata HTTP con una domanda che usa un tool: risposta e traccia nei log
+  - [x] Modello o strumenti non disponibili: codice e messaggio di errore comprensibili
+  - [x] Test dell'API con il grafo simulato; documentazione OpenAPI consultabile
+- [x] Prova reale con LM Studio · [x] README · [x] Commit
 - **Evidenza minima:** stessa risposta dalla CLI e dall'API
 
 ## Step 7 · Back-end: API e salvataggio delle chat
-- [ ] Specifica e piano approvati
-- [ ] Creare una chat (restituisce l'identificativo)
-- [ ] Elencare le chat (titolo e data dell'ultimo messaggio)
-- [ ] Leggere una chat (messaggi in ordine cronologico)
-- [ ] Inviare un messaggio (salva la domanda, chiama l'agente, salva e restituisce la risposta)
-- [ ] Eliminare una chat (con i suoi messaggi)
-- [ ] Salvataggio in PostgreSQL
+- [x] Specifica e piano approvati
+- [x] Creare una chat (restituisce l'identificativo)
+- [x] Elencare le chat (titolo e data dell'ultimo messaggio)
+- [x] Leggere una chat (messaggi in ordine cronologico)
+- [x] Inviare un messaggio (salva la domanda, chiama l'agente, salva e restituisce la risposta)
+- [x] Eliminare una chat (con i suoi messaggi)
+- [x] Salvataggio in PostgreSQL
 - Evidenze
-  - [ ] Documentazione OpenAPI generata e consultabile
-  - [ ] Agente non raggiungibile: errore chiaro e comportamento documentato
-  - [ ] Test con l'agente simulato; chat ancora presenti dopo il riavvio
-- [ ] Prova reale con LM Studio · [ ] README · [ ] Commit
+  - [x] Documentazione OpenAPI generata e consultabile
+  - [x] Agente non raggiungibile: errore chiaro e comportamento documentato
+  - [x] Test con l'agente simulato; chat ancora presenti dopo il riavvio
+- [x] Prova reale con LM Studio · [x] README · [x] Commit
 - **Evidenza minima:** chat persistenti dopo il riavvio; OpenAPI consultabile
 
 ## Step 8 · Front-end: interfaccia di chat
-- [ ] Specifica e piano approvati
-- [ ] Chiamate generate dal documento OpenAPI del back-end
-- [ ] Elenco, creazione ed eliminazione delle chat
-- [ ] Vista dei messaggi e invio di una nuova domanda
-- [ ] Stato di attesa ed errori comprensibili
-- [ ] Indirizzo del back-end da configurazione
+- [x] Specifica e piano approvati
+- [x] Chiamate generate dal documento OpenAPI del back-end
+- [x] Elenco, creazione ed eliminazione delle chat
+- [x] Vista dei messaggi e invio di una nuova domanda
+- [x] Stato di attesa ed errori comprensibili
+- [x] Indirizzo del back-end da configurazione
 - Evidenze
-  - [ ] Conversazione completa dal browser, con uso di uno strumento
-  - [ ] Chat creata dall'interfaccia ancora presente dopo il riavvio
-  - [ ] Con l'agente spento l'interfaccia mostra l'errore senza bloccarsi
-- [ ] Prova reale con LM Studio · [ ] README · [ ] Commit
+  - [x] Conversazione completa dal browser, con uso di uno strumento
+  - [x] Chat creata dall'interfaccia ancora presente dopo il riavvio
+  - [x] Con l'agente spento l'interfaccia mostra l'errore senza bloccarsi
+- [x] Prova reale con LM Studio · [x] README · [x] Commit
 - **Evidenza minima:** conversazione completa dal browser, errori mostrati
 
 ## Step 9 · Docker Compose: un container per componente
-- [ ] Specifica e piano approvati
-- [ ] Quattro servizi in `compose.yaml`: tre Dockerfile + PostgreSQL ufficiale
-- [ ] Browser → front-end; API → back-end (porta o proxy); agente non esposto
-- [ ] Volume per PostgreSQL; credenziali in `.env` fuori da Git; back-end a database pronto
-- [ ] Agente → LM Studio con `host.docker.internal`; server MCP stdio nel suo container
+- [x] Specifica e piano approvati
+- [x] Quattro servizi in `compose.yaml`: tre Dockerfile + PostgreSQL ufficiale
+- [x] Browser → front-end; API → back-end (porta o proxy); agente non esposto
+- [x] Volume per PostgreSQL; credenziali in `.env` fuori da Git; back-end a database pronto
+- [x] Agente → LM Studio con `host.docker.internal`; server MCP stdio nel suo container
 - Evidenze
-  - [ ] `docker compose up` avvia i quattro servizi; `docker compose ps` li mostra attivi
-  - [ ] Chat dal browser con uno strumento, visibile nei log dell'agente
-  - [ ] Dopo `down` e `up` le chat sono ancora presenti
-- [ ] Prova reale con LM Studio · [ ] README · [ ] Commit
+  - [x] `docker compose up` avvia i quattro servizi; `docker compose ps` li mostra attivi
+  - [x] Chat dal browser con uno strumento, visibile nei log dell'agente
+  - [x] Dopo `down` e `up` le chat sono ancora presenti
+- [x] Prova reale con LM Studio · [x] README · [x] Commit
 - **Evidenza minima:** quattro container avviati con un comando; agente non esposto
 
 ## Facoltativo · Streaming della risposta (dopo lo step 9, se manca)

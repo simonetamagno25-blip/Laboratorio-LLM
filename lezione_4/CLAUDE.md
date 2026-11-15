@@ -57,18 +57,32 @@ Un'applicazione da terminale in Python che conversa con un modello locale e:
 - Aggiornare questo file quando cambiano convenzioni stabili (struttura, comandi di test,
   regole di lavoro), non per annotare l'avanzamento.
 
+## Struttura (dalla lezione 6)
+- `assistente/`: grafo (riassunto → router → agente ⇄ strumenti → revisore), agente HTTP
+  (`assistente/servizio.py`, FastAPI) e CLI client (`python -m assistente`);
+- `convertitore_mcp/`: server MCP (tool `converti_unita`, resource `utente://preferenze`, prompt
+  `spiega` e `riassumi_conversazione`); `scadenze_api/`: servizio HTTP di giorni e scadenze;
+- `backend/`: API delle chat per il front-end, PostgreSQL; `frontend/`: interfaccia di chat
+  (HTML/JS, `api.js` generato da `frontend/openapi.json`);
+- `compose.yaml`: front-end, back-end, agente, database (CLI con il profilo `cli`).
+
 ## Comandi
-Da PowerShell, dalla cartella `lezione_4/` (comandi verificati, salvo dove indicato; dettagli nel `README.md`):
+Da PowerShell, dalla cartella `lezione_4/` (comandi verificati; dettagli nel `README.md`):
 - ambiente: `py -m venv .venv` poi `.\.venv\Scripts\python -m pip install -r requirements-dev.txt`;
 - caricare `.env` nella sessione:
   `Get-Content .env | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Object { $k, $v = $_ -split '=', 2; Set-Item "env:$($k.Trim())" $v.Trim() }`;
-- servizio API di giorni e scadenze (da avviare prima, in un'altra finestra): `.\.venv\Scripts\python -m scadenze_api`;
-- avvio locale: `.\.venv\Scripts\python -m assistente`;
-- avvio Docker (verificato, input da pipe): `docker compose build`, poi
-  `"Che ore sono?", "/esci" | docker compose run --rm -T assistente`; alla fine `docker compose down`
-  (ferma anche il servizio `scadenze`; le note restano nel volume `note`, che solo
-  `docker compose down -v` cancella);
-- avvio Docker interattivo con TTY (verificato a mano): `docker compose run --rm assistente`;
-- test automatici: `.\.venv\Scripts\python -m pytest -v`;
-- test nel container: `docker compose run --rm assistente python -m pytest -v`;
-- prova reale con LM Studio: `.\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -v -s`.
+- in locale, ognuno in una finestra: `.\.venv\Scripts\python -m scadenze_api`,
+  `.\.venv\Scripts\python -m assistente.servizio` (agente, porta 8100), poi la CLI
+  `.\.venv\Scripts\python -m assistente`; back-end `.\.venv\Scripts\python -m backend` (serve
+  `DATABASE_URL`) e front-end `.\.venv\Scripts\python -m frontend` (porta 8300);
+- applicazione completa in Docker: `docker compose up -d --build`, browser su `http://localhost:8080`,
+  `docker compose ps`, `docker compose logs agente`; alla fine `docker compose down` (chat e note
+  restano nei volumi; `docker compose down -v` le cancella);
+- CLI in Docker con input da pipe: `"Quanto fa 2 + 2?", "/esci" | docker compose run --rm -T assistente`;
+- test automatici: `.\.venv\Scripts\python -m pytest -v`; test nel container:
+  `docker compose run --rm assistente python -m pytest -v`;
+- client del front-end dopo una modifica al back-end: `.\.venv\Scripts\python -m frontend.genera_api`;
+- archivio PostgreSQL reale: `POSTGRES_TEST_URL` impostata e
+  `.\.venv\Scripts\python -m pytest tests/test_backend_archivio.py --postgres -v`;
+- prova reale con LM Studio: `.\.venv\Scripts\python -m pytest --lmstudio -m lmstudio -v -s`
+  (a gruppi con `-k router`, `-k revisore`, `-k "riassunto or preferenze or prompt_"`).

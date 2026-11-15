@@ -385,3 +385,161 @@ def test_revisore_risposta_parziale_corretta(caplog):
     chiamate = [c for m in stato["messages"] if isinstance(m, AIMessage) for c in m.tool_calls]
     print(f"   strumenti chiamati: {[c['name'] for c in chiamate]}")
     assert "391" in stato["messages"][-1].content, stato["messages"][-1].content
+
+
+# --- Riassunto ---
+
+
+@pytest.mark.lmstudio
+def test_riassunto_conserva_il_nome(caplog):
+    import logging
+
+    from assistente.cli import Sessione
+    from assistente.modello import crea_riassuntore
+
+    caplog.set_level(logging.INFO)
+    config = carica_configurazione()
+    strumenti = crea_strumenti()
+    # Soglia bassa per arrivare alla compressione in pochi turni.
+    grafo = costruisci_grafo(
+        crea_modello(config, strumenti),
+        strumenti,
+        config.fuso_predefinito,
+        config.max_passaggi_strumenti,
+        router=crea_router(config),
+        ambito=config.ambito,
+        revisore=crea_revisore(config),
+        max_revisioni=config.max_revisioni,
+        riassuntore=crea_riassuntore(config),
+        soglia_riassunto=6,
+        messaggi_conservati=2,
+    )
+    sessione = Sessione(
+        grafo, limite_ricorsione(config.max_passaggi_strumenti, config.max_revisioni)
+    )
+    for domanda in ["Ciao, mi chiamo Giulia.", "Quanto fa 12 * 7?", "Che ore sono a Tokyo?"]:
+        print(f"\n{domanda}\n-> {sessione.chiedi(domanda)}")
+    risposta = sessione.chiedi("Come mi chiamo?")
+    righe = [r.getMessage() for r in caplog.records if r.getMessage().startswith("riassunto:")]
+    print(f"\nCome mi chiamo?\n-> {risposta}")
+    for riga in righe:
+        print(f"   {riga}")
+    print(f"   riassunto: {sessione.riassunto}")
+    assert righe, "nessuna compressione nei log"
+    assert not any(m.text == "Ciao, mi chiamo Giulia." for m in sessione.cronologia)
+    assert "Giulia" in risposta, risposta
+
+
+# --- Preferenze (resource MCP) ---
+
+
+def grafo_con_preferenze(tmp_path, dati):
+    import json
+
+    from assistente.client_mcp import ClientMCP, comando_convertitore
+    from assistente.preferenze import carica_preferenze, predefinite
+
+    file = tmp_path / "preferenze.json"
+    file.write_text(json.dumps(dati), encoding="utf-8")
+    config = carica_configurazione()
+    with ClientMCP(*comando_convertitore(), ambiente={"PERCORSO_PREFERENZE": str(file)}) as client:
+        preferenze = carica_preferenze(client, predefinite(config.fuso_predefinito))
+    strumenti = crea_strumenti()
+    grafo = costruisci_grafo(
+        crea_modello(config, strumenti),
+        strumenti,
+        config.fuso_predefinito,
+        config.max_passaggi_strumenti,
+        preferenze=preferenze,
+    )
+    return grafo, limite_ricorsione(config.max_passaggi_strumenti)
+
+
+@pytest.mark.lmstudio
+def test_preferenze_fuso_predefinito_new_york(tmp_path):
+    grafo = grafo_con_preferenze(
+        tmp_path, {"lingua": "italiano", "fuso_orario": "America/New_York", "stile": "sintetico"}
+    )
+    stato = turno(grafo, [HumanMessage("Che ore sono?")])
+    chiamate = [c for m in stato["messages"] if isinstance(m, AIMessage) for c in m.tool_calls]
+    assert any(
+        c["name"] == "ora_corrente" and c["args"].get("fuso_orario") == "America/New_York"
+        for c in chiamate
+    ), chiamate
+
+
+@pytest.mark.lmstudio
+def test_preferenze_lingua_inglese(tmp_path):
+    grafo = grafo_con_preferenze(
+        tmp_path, {"lingua": "inglese", "fuso_orario": "Europe/Rome", "stile": "dettagliato"}
+    )
+    stato = turno(grafo, [HumanMessage("Che ore sono a Tokyo?")])
+    risposta = stato["messages"][-1].content.casefold()
+    # Lettura a occhio della risposta stampata; qui un controllo grezzo sulla lingua.
+    assert any(parola in risposta for parola in (" the ", " is ", "it's", "time")), risposta
+    assert "sono le" not in risposta, risposta
+
+
+# --- Prompt MCP ---
+
+
+@pytest.fixture(scope="module")
+def sessione_con_prompt():
+    from assistente.cli import Sessione
+    from assistente.client_mcp import ClientMCP, comando_convertitore
+
+    config = carica_configurazione()
+    strumenti = crea_strumenti()
+    grafo = costruisci_grafo(
+        crea_modello(config, strumenti),
+        strumenti,
+        config.fuso_predefinito,
+        config.max_passaggi_strumenti,
+        router=crea_router(config),
+        ambito=config.ambito,
+        revisore=crea_revisore(config),
+        max_revisioni=config.max_revisioni,
+    )
+    with ClientMCP(*comando_convertitore()) as client:
+        yield (
+            Sessione(grafo, limite_ricorsione(config.max_passaggi_strumenti, config.max_revisioni)),
+            client,
+        )
+
+
+@pytest.mark.lmstudio
+def test_prompt_spiega_livello_base(sessione_con_prompt, caplog):
+    import logging
+
+    from assistente.comandi import in_messaggi, interpreta_comando_prompt, valida
+
+    caplog.set_level(logging.INFO)
+    sessione, client = sessione_con_prompt
+    riga = '/prompt spiega argomento="Model Context Protocol" livello=base'
+    nome, argomenti = interpreta_comando_prompt(riga)
+    valida(nome, argomenti, client.elenca_prompt())
+    risposta = sessione.chiedi_messaggi(in_messaggi(client.ottieni_prompt(nome, argomenti)))
+    righe = [
+        r.getMessage() for r in caplog.records
+        if r.getMessage().startswith(("prompts/", "router:", "revisore:"))
+    ]
+    print(f"\n{riga}")
+    for riga_log in righe:
+        print(f"   {riga_log}")
+    print(f"-> {risposta}")
+    assert any(r.startswith("router: categoria=conversazione") for r in righe), righe
+    assert "protocol" in risposta.casefold(), risposta
+
+
+@pytest.mark.lmstudio
+def test_prompt_riassumi_conversazione(sessione_con_prompt):
+    from assistente.comandi import in_messaggi
+
+    sessione, client = sessione_con_prompt
+    for domanda in ["Che ore sono a Tokyo?", "Quanto fa 12 * 7?"]:
+        print(f"\n{domanda}\n-> {sessione.chiedi(domanda)}")
+    messaggi = in_messaggi(client.ottieni_prompt("riassumi_conversazione", {"stile": "sintetico"}))
+    risposta = sessione.chiedi_messaggi(messaggi)
+    print(f"\n/prompt riassumi_conversazione stile=sintetico\n-> {risposta}")
+    assert "Tokyo" in risposta, risposta
+    assert "84" in risposta or "12" in risposta, risposta

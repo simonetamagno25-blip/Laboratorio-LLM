@@ -21,8 +21,22 @@ rilette dall'utente.
 | 8 Front-end | `specs/2026-11-14-frontend-design.md` | conversazione dal browser, errori | browser: strumento, agente spento |
 | 9 Compose | `specs/2026-11-14-compose-design.md` | 4 container, agente non esposto | `docker compose ps`, browser |
 
-Test automatici: 495 passati, 36 saltati (locale e nel container). Le 36 saltate sono le prove
-LM Studio (29) e PostgreSQL (7).
+Test automatici: 503 passati, 37 saltati (prove LM Studio e PostgreSQL, attivate con `--lmstudio` e
+`--postgres`); archivio su PostgreSQL vero: 18 passati.
+
+## Revisione finale (step 2–9, da `c2736a4` a `fe0e7c8`)
+Esito «pronto con correzioni». Corretti:
+- C1: conferma scaduta (agente riavviato o ripresa fallita) bloccava la chat per sempre → il back-end
+  la libera con un 409 leggibile;
+- I1: riassunto vuoto cancellava i turni vecchi → nessuna compressione, `WARNING`;
+- I2: l'indicazione del revisore poteva far ripetere azioni con effetti → «completa solo le parti
+  mancanti, non ripetere azioni già eseguite»;
+- I3: la conferma dopo un ricaricamento non diceva quale nota → domanda salvata e mostrata;
+- minori: timeout dell'agente come 504 (non «non raggiungibile»), margine di nginx, checkpoint dei
+  turni eliminati, variabili PostgreSQL obbligatorie in Compose, documentazione allineata.
+Non corretti (minori, annotati): turni sospesi senza scadenza nell'agente; strumenti usati
+riconosciuti per id della tool call; chat eliminata durante un turno → 500; invii concorrenti sulla
+stessa chat; `/stato` usa l'elenco degli strumenti MCP caricato all'avvio.
 
 ## Dipendenze nuove (versioni fissate)
 `fastapi==0.163.0`, `uvicorn==0.54.0` (già presente con `mcp`), `psycopg[binary]==3.3.9`.

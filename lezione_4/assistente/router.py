@@ -30,6 +30,10 @@ def prompt_router(ambito: str) -> str:
         "«come mi chiamo?», «riassumi quello che ci siamo detti»), anche se i turni a cui si "
         "riferiscono non sono più visibili, e domande brevi che proseguono un argomento in "
         "ambito dei turni precedenti (per esempio «e a Tokyo?» dopo una domanda sull'ora).\n"
+        "Sono «conversazione» anche le domande su oggetti, attrezzi, componenti o codici "
+        "articolo del magazzino del laboratorio (per esempio «avete una breadboard?», "
+        "«dove si trova ATT-002?»), anche se l'articolo potrebbe non esserci: se esiste lo "
+        "verifica l'assistente nel catalogo, non il router.\n"
         "Il seguito di una domanda fuori ambito resta «fuori_ambito» (per esempio "
         "«e quella dell'amatriciana?» dopo una richiesta di ricetta)."
     )

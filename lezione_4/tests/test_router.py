@@ -101,3 +101,12 @@ def test_prompt_domande_sull_utente_e_sulla_conversazione():
     prompt = prompt_router("ora e date")
     assert "come mi chiamo" in prompt.casefold()
     assert "conversazione in corso" in prompt
+
+
+def test_prompt_articoli_del_magazzino():
+    # Prova reale: «Avete un saldatore?» e «Dimmi tutto su SEN-004» venivano rifiutate come
+    # fuori ambito; se un articolo esiste lo verifica l'agente nel catalogo, non il router.
+    prompt = prompt_router("materiale del laboratorio").casefold()
+    assert "magazzino" in prompt
+    assert "codici articolo" in prompt
+    assert "anche se l'articolo potrebbe non esserci" in prompt

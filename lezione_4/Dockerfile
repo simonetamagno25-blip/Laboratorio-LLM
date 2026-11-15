@@ -10,6 +10,9 @@ RUN pip install --no-cache-dir -r requirements-dev.txt
 COPY assistente/ assistente/
 COPY convertitore_mcp/ convertitore_mcp/
 COPY scadenze_api/ scadenze_api/
+# Back-end e front-end solo per eseguire tutta la suite di test nel container.
+COPY backend/ backend/
+COPY frontend/ frontend/
 COPY tests/ tests/
 COPY pyproject.toml preferenze.json ./
 

@@ -1,0 +1,83 @@
+# Applicazione completa: front-end, back-end, agente e database, un container per componente.
+# LM Studio resta sull'host. Avvio: docker compose up -d --build  →  http://localhost:8080
+services:
+  # Interfaccia di chat (nginx): unico servizio pubblicato; inoltra /api al back-end.
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      BACKEND_INTERNO_URL: http://backend:8200
+    ports:
+      - "${FRONTEND_PORTA_HOST:-8080}:80"
+    depends_on:
+      - backend
+
+  # API per il front-end: chat e messaggi in PostgreSQL, domande inoltrate all'agente.
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}
+      AGENTE_URL: http://agente:8100
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORTA: "8200"
+    depends_on:
+      database:
+        # Il back-end parte a database pronto (e riprova comunque la connessione all'avvio).
+        condition: service_healthy
+      agente:
+        condition: service_started
+
+  # Agente come servizio HTTP: grafo, client MCP e strumenti. Nessuna porta pubblicata.
+  agente:
+    build: .
+    command: ["python", "-m", "assistente.servizio"]
+    env_file: .env
+    environment:
+      LMSTUDIO_BASE_URL: http://host.docker.internal:1234/v1
+      AGENTE_HOST: 0.0.0.0
+      AGENTE_PORTA: "8100"
+      PERCORSO_DB_NOTE: /app/note/note.sqlite3
+      # Il servizio scadenze (strumento dell'agente) gira nel suo container, come il server MCP stdio.
+      SCADENZE_INTERNO: "1"
+      SCADENZE_API_URL: http://127.0.0.1:8000
+    volumes:
+      # Le note restano anche quando il container viene ricreato; `docker compose down -v` le cancella.
+      - note:/app/note
+      # Preferenze dell'utente (resource MCP): modificabili sull'host, valgono dalla sessione successiva.
+      - ./preferenze.json:/app/preferenze.json:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # PostgreSQL con l'immagine ufficiale; credenziali in .env (fuori da Git).
+  database:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - dati_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # CLI da terminale (client dell'API dell'agente): non parte con `up`, solo con
+  # docker compose run --rm assistente
+  assistente:
+    build: .
+    profiles: ["cli"]
+    environment:
+      AGENTE_URL: http://agente:8100
+    depends_on:
+      - agente
+    stdin_open: true
+    tty: true
+
+volumes:
+  note:
+  dati_postgres:

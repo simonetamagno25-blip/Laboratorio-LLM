@@ -5,6 +5,7 @@ chiamante e tornano aggiornati. La documentazione OpenAPI è su /docs e /openapi
 """
 
 import logging
+import os
 import sys
 from collections.abc import Callable
 from typing import Literal
@@ -283,6 +284,23 @@ def main() -> int:
         archivio.chiudi()
 
 
+def avvia_scadenze_interno():
+    """Servizio scadenze nello stesso processo dell'agente (SCADENZE_INTERNO=1, usato in Docker).
+
+    È uno strumento dell'agente: come i server MCP via stdio, gira nel suo container.
+    Restituisce il server e il suo indirizzo (porta libera su 127.0.0.1).
+    """
+    import threading
+
+    from scadenze_api.servizio import crea_server
+
+    server = crea_server("127.0.0.1", 0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}"
+    log.info("servizio scadenze interno su %s", url)
+    return server, url
+
+
 def _avvia(config, catalogo, archivio) -> int:
     client_mcp = ClientMCP(
         *comando_convertitore(), ambiente={"PERCORSO_PREFERENZE": config.percorso_preferenze}
@@ -297,6 +315,9 @@ def _avvia(config, catalogo, archivio) -> int:
         print("Arrivederci.")
         return 130
 
+    scadenze_interno, scadenze_url = None, config.scadenze_api_url
+    if os.environ.get("SCADENZE_INTERNO", "").strip() == "1":
+        scadenze_interno, scadenze_url = avvia_scadenze_interno()
     # Il try/finally chiude il server MCP anche con Ctrl+C o errori imprevisti.
     try:
         # Resource: la legge l'host una volta, prima della prima domanda (non è uno strumento).
@@ -304,7 +325,7 @@ def _avvia(config, catalogo, archivio) -> int:
         strumenti = (
             crea_strumenti(catalogo=catalogo, archivio=archivio)
             + client_mcp.strumenti()
-            + crea_strumenti_api(config.scadenze_api_url)
+            + crea_strumenti_api(scadenze_url)
         )
         grafo = costruisci_grafo(
             crea_modello(config, strumenti),
@@ -335,6 +356,9 @@ def _avvia(config, catalogo, archivio) -> int:
         pass
     finally:
         client_mcp.chiudi()
+        if scadenze_interno is not None:
+            scadenze_interno.shutdown()
+            scadenze_interno.server_close()
     return 0
 
 

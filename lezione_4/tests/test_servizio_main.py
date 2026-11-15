@@ -213,3 +213,29 @@ def test_avvio_passa_il_client_mcp_all_api(monkeypatch):
     monkeypatch.setattr(punto_di_ingresso, "servi", lambda app, host, porta: None)
     assert punto_di_ingresso.main() == 0
     assert hasattr(ricevuti[0], "elenca_prompt")
+
+
+def test_scadenze_interno_avvia_il_servizio_nel_processo_dell_agente(monkeypatch):
+    import httpx
+
+    for nome, valore in ENV.items():
+        monkeypatch.setenv(nome, valore)
+    monkeypatch.setenv("SCADENZE_INTERNO", "1")
+    indirizzi, salute = [], []
+    originale = punto_di_ingresso.crea_strumenti_api
+
+    def registra(url):
+        indirizzi.append(url)
+        return originale(url)
+
+    def servi_e_prova(app, host, porta):
+        # Mentre l'agente è in servizio, il servizio scadenze risponde nello stesso processo.
+        salute.append(httpx.get(f"{indirizzi[0]}/salute").status_code)
+
+    monkeypatch.setattr(punto_di_ingresso, "crea_strumenti_api", registra)
+    monkeypatch.setattr(punto_di_ingresso, "crea_modello", lambda config, strumenti: object())
+    monkeypatch.setattr(punto_di_ingresso, "servi", servi_e_prova)
+    assert punto_di_ingresso.main() == 0
+    assert indirizzi[0].startswith("http://127.0.0.1:")
+    assert indirizzi[0] != ENV["SCADENZE_API_URL"]
+    assert salute == [200]

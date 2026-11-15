@@ -19,7 +19,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER:?impostare POSTGRES_USER nel .env}:${POSTGRES_PASSWORD:?impostare POSTGRES_PASSWORD nel .env}@database:5432/${POSTGRES_DB:?impostare POSTGRES_DB nel .env}
       AGENTE_URL: http://agente:8100
       BACKEND_HOST: 0.0.0.0
       BACKEND_PORTA: "8200"
@@ -46,7 +46,7 @@ services:
     volumes:
       # Le note restano anche quando il container viene ricreato; `docker compose down -v` le cancella.
       - note:/app/note
-      # Preferenze dell'utente (resource MCP): modificabili sull'host, valgono dalla sessione successiva.
+      # Preferenze dell'utente (resource MCP): modificabili sull'host, valgono dal riavvio dell'agente.
       - ./preferenze.json:/app/preferenze.json:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"

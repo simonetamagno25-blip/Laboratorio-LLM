@@ -296,7 +296,7 @@ che non risponde in tempo.
 ## Note personali
 
 Le note sono promemoria dell'utente salvati in un file SQLite che resta dopo la chiusura
-dell'assistente; la cronologia della conversazione invece sparisce, come prima. Il file è
+dell'assistente; la cronologia della conversazione invece dura quanto la sessione della CLI (dal browser le chat sono salvate dal back-end in PostgreSQL). Il file è
 `PERCORSO_DB_NOTE` (predefinito `note.sqlite3` nella cartella da cui si avvia l'assistente; la
 cartella viene creata se manca). I file `*.sqlite3` sono esclusi da Git e dall'immagine Docker; in
 Docker il file sta sul volume `note` (vedi «Avvio»).
@@ -386,7 +386,7 @@ del messaggio.
 |---|---|
 | `POST /conversazione` | `{messaggio, cronologia, riassunto}` → `{tipo, risposta, strumenti, cronologia, riassunto}` |
 | `POST /conferma` | `{id_conferma, conferma}`: risposta sì/no a un'eliminazione di nota (`tipo="conferma"`) |
-| `GET /stato` | agente, server MCP e modello raggiungibili (`503` se qualcosa non lo è) |
+| `GET /stato` | agente, strumenti MCP caricati all'avvio e modello raggiungibile (`503` se manca qualcosa) |
 | `GET /prompts`, `POST /prompts/{nome}` | `prompts/list` e `prompts/get` del server MCP |
 
 L'agente è senza stato: cronologia e riassunto arrivano dal chiamante e tornano aggiornati. Unica
@@ -451,7 +451,8 @@ modello non chiama lo strumento: per provare l'errore serve una richiesta esplic
     Verificata con la prova reale; da verificare in una sessione interattiva.
 13. Riassunto: con `SOGLIA_RIASSUNTO` bassa (per esempio 6) il nome detto al primo turno è ancora
     usato dopo la compressione. Verificata con la prova reale.
-14. Preferenze: modificando `preferenze.json` (fuso, lingua, stile) la sessione successiva ne tiene
+14. Preferenze: modificando `preferenze.json` (fuso, lingua, stile) e riavviando l'agente
+    (`docker compose restart agente` in Docker) le risposte successive ne tengono
     conto senza cambiare il codice. Verificata con la prova reale (file temporaneo).
 15. Prompt: `/prompts`, `/prompt spiega ...`, argomenti mancanti o sconosciuti bloccati. Verificata
     con la CLI client e con la prova reale.
@@ -507,7 +508,8 @@ Le preferenze dell'utente sono una resource MCP (`utente://preferenze`, file `pr
 l'agente la legge una volta all'avvio, prima della prima domanda, e la mette in cima al prompt di
 sistema. Lingua e fuso orario sostituiscono quelli predefiniti. Non è uno strumento: il modello non
 la chiama e non compare tra i tool. Se non è disponibile si usano i valori predefiniti (`WARNING`).
-Modificando il file, la sessione successiva si comporta di conseguenza, senza cambiare il codice.
+Modificando il file e riavviando l'agente (le preferenze si leggono all'avvio del servizio; in
+Docker `docker compose restart agente`), le risposte si adeguano senza cambiare il codice.
 Il codice è in `assistente/grafo.py`; prompt, schema della decisione e messaggio di rifiuto sono in
 `assistente/router.py`; quelli del revisore in `assistente/revisore.py`.
 
@@ -563,7 +565,7 @@ per gli altri anni il conteggio dei giorni lavorativi è rifiutato, quello di ca
 - `LMSTUDIO_BASE_URL` deve essere `http://localhost:1234/v1` e `.env` deve essere stato caricato.
 
 **LM Studio non raggiungibile da Docker:**
-- nel container l'indirizzo è `http://host.docker.internal:1234/v1`, già impostato da `docker-compose.yml`;
+- nel container l'indirizzo è `http://host.docker.internal:1234/v1`, già impostato da `compose.yaml`;
 - in LM Studio, nelle impostazioni del server, può servire attivare l'opzione per servire sulla rete
   locale (Serve on Local Network), così il server non ascolta solo su localhost.
   Non è stata necessaria nella prova su questo computer, ma è il primo controllo se la connessione fallisce.

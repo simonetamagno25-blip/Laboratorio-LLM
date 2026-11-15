@@ -7,7 +7,7 @@ con le evidenze richieste e registrato con un commit.
 Per ogni step: specifica e piano approvati → test automatici (modello simulato) →
 prova reale con LM Studio → README aggiornato → commit.
 
-Stato: step 1–9 completati il 2026-11-15 (dettagli e verifiche in `docs/superpowers/handoff-2026-11-15-lezione-6.md`).
+Stato: step 1–9 completati il 2026-11-15 (dettagli e verifiche in `docs/superpowers/handoff-2026-11-15-agente-web.md`).
 
 Punto di partenza: agente delle lezioni 4 e 5 (grafo `modello` ⇄ `strumenti`, conferma
 dell'eliminazione delle note, server MCP `convertitore_mcp` via stdio, servizio HTTP

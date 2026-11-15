@@ -6,7 +6,7 @@ al prompt di sistema, con valori predefiniti se non disponibile.
 **Specifica:** `docs/superpowers/specs/2026-11-14-preferenze-design.md` · **Stack:** invariato.
 
 ## Vincoli globali
-- Solo dentro `lezione_4/`, branch `feat/lezione-6`, TDD, un commit per incremento.
+- Solo dentro `lezione_4/`, branch `feat/agente-web`, TDD, un commit per incremento.
 - Nomi esatti: URI `utente://preferenze`, campi `lingua`, `fuso_orario`, `stile`
   (`sintetico`|`dettagliato`), variabile `PERCORSO_PREFERENZE`, file `preferenze.json`.
 

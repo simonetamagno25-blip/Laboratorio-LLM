@@ -6,7 +6,7 @@ turni vecchi con un riassunto aggiornato nello stato, senza separare strumenti e
 **Specifica:** `docs/superpowers/specs/2026-11-14-riassunto-design.md` · **Stack:** invariato.
 
 ## Vincoli globali
-- Solo dentro `lezione_4/`, branch `feat/lezione-6`, TDD, un commit per incremento.
+- Solo dentro `lezione_4/`, branch `feat/agente-web`, TDD, un commit per incremento.
 - Nomi esatti: nodo `riassunto`, campo `riassunto`, variabili `SOGLIA_RIASSUNTO`, `MESSAGGI_CONSERVATI`.
 - Righe di log esatte: vedi la specifica.
 

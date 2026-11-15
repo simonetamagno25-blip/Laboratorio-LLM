@@ -1,10 +1,10 @@
 # Handoff — ripresa dopo la lezione 6
 
-Data: 2026-11-15 · Branch: `feat/lezione-6` (57 commit sopra `feat/note`), inviato su
-`origin/feat/lezione-6` su richiesta dell'utente. `main` e `dev` non toccati; nessuna PR né merge.
+Data: 2026-11-15 · Branch: `feat/agente-web` (57 commit sopra `feat/note`), inviato su
+`origin/feat/agente-web` su richiesta dell'utente. `main` e `dev` non toccati; nessuna PR né merge.
 
 Il dettaglio di cosa è stato fatto, con le verifiche e la revisione finale, è in
-`handoff-2026-11-15-lezione-6.md`. Questo file serve a riprendere il lavoro.
+`handoff-2026-11-15-agente-web.md`. Questo file serve a riprendere il lavoro.
 
 ## Stato
 - Step 1–9 della lezione 6 completati e verificati (ROADMAP: tutto spuntato tranne lo streaming
@@ -18,7 +18,7 @@ Il dettaglio di cosa è stato fatto, con le verifiche e la revisione finale, è 
   di prova (id 1 vuota, id 2 «Ciao, mi chiamo Giulia…») stanno nel volume `dati_postgres`.
 
 ## Come riprendere
-1. `git status` e `git log --oneline -5` sul branch `feat/lezione-6`.
+1. `git status` e `git log --oneline -5` sul branch `feat/agente-web`.
 2. LM Studio con `google/gemma-4-e2b` e server su `:1234`; caricare `.env` (comando nel CLAUDE.md).
 3. Applicazione completa: `docker compose up -d --build`, poi `http://localhost:8080`.
    Oppure in locale: `python -m assistente.servizio`, `python -m assistente` (vedi README «Avvio»).

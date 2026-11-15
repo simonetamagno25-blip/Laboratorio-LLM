@@ -1,7 +1,7 @@
 # Step 1 · Router: conversazione o fuori ambito — specifica
 
 Lezione 6, «Esercitazioni di laboratorio: evolvere l'agente» (`LLM_Lez_6.pdf`, pagina 4).
-Branch: `feat/lezione-6`, creato da `feat/note`.
+Branch: `feat/agente-web`, creato da `feat/note`.
 
 ## Intento
 L'agente ha un ambito dichiarato. Prima dell'agente un nodo LLM decide se la domanda rientra
@@ -28,7 +28,7 @@ non sceglie gli strumenti: se servono, li sceglie l'agente come prima.
 ## Decisioni prese con l'utente
 | Tema | Decisione |
 |---|---|
-| Branch | nuovo `feat/lezione-6` creato da `feat/note` |
+| Branch | nuovo `feat/agente-web` creato da `feat/note` |
 | Dove sta l'ambito | variabile `AMBITO_AGENTE` nel `.env`, **obbligatoria**: se manca, il programma esce con codice 2, come per le altre variabili obbligatorie |
 | Ampiezza dell'ambito | strumenti del laboratorio (ora e date, calcoli e conversioni, giorni e scadenze, materiale del laboratorio, note personali), saluti e domande sull'assistente, **più** spiegazioni sui temi del corso (deep learning, LLM, agenti, MCP, LangGraph). Così lo step 5 (`spiega "Model Context Protocol"`) passa dal router senza cambiare l'ambito |
 | Output del router non valido | **fail-open**: la domanda passa all'agente, con un `WARNING` nei log. Se LM Studio non è raggiungibile il turno fallisce, come oggi |

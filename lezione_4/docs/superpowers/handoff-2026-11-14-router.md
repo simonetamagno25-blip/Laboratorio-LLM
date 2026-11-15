@@ -1,6 +1,6 @@
 # Handoff — lezione 6, step 1: router
 
-Data: 2026-11-14 · Branch: `feat/lezione-6`, creato da `feat/note`, solo locale, niente push ·
+Data: 2026-11-14 · Branch: `feat/agente-web`, creato da `feat/note`, solo locale, niente push ·
 `main` e `dev` non toccati.
 
 ## Contesto
@@ -21,7 +21,7 @@ Data: 2026-11-14 · Branch: `feat/lezione-6`, creato da `feat/note`, solo locale
 ## Decisioni prese con l'utente (step 1)
 | Tema | Decisione |
 |---|---|
-| Branch | `feat/lezione-6`, creato da `feat/note` |
+| Branch | `feat/agente-web`, creato da `feat/note` |
 | Ambito | variabile `AMBITO_AGENTE` nel `.env`, obbligatoria (codice di uscita 2 se manca) |
 | Ampiezza dell'ambito | strumenti del laboratorio, temi del corso (DL, LLM, agenti, LangGraph, MCP), saluti e domande sull'assistente. Così allo step 5 `spiega "Model Context Protocol"` passa dal router |
 | Output del router non valido | fail-open: la domanda va all'agente, con un `WARNING` nei log |

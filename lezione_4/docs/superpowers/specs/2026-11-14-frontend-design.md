@@ -1,6 +1,6 @@
 # Step 8 · Front-end: interfaccia di chat — specifica
 
-Data: 2026-11-14 · Branch: `feat/lezione-6` · Fonte: `LLM_Lez_6.pdf`, step 8.
+Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: `LLM_Lez_6.pdf`, step 8.
 Parte dallo step 7 (back-end) funzionante.
 
 ## Intento

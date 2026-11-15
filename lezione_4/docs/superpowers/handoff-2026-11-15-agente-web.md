@@ -1,4 +1,4 @@
-# Handoff — agente web, step 1–9
+# Handoff — lezione 6, step 1–9
 
 Data: 2026-11-15 · Branch: `feat/agente-web`, solo locale, niente push · `main` e `dev` non toccati.
 

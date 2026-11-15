@@ -1,6 +1,6 @@
 # Step 1 · Router: conversazione o fuori ambito — specifica
 
-Fonte: «Esercitazioni di laboratorio: evolvere l'agente» (PDF delle esercitazioni, pagina 4).
+Lezione 6, «Esercitazioni di laboratorio: evolvere l'agente» (`LLM_Lez_6.pdf`, pagina 4).
 Branch: `feat/agente-web`, creato da `feat/note`.
 
 ## Intento

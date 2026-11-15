@@ -1,6 +1,6 @@
 # Step 2 · Revisore: la risposta è coerente con la domanda? — specifica
 
-Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: PDF delle esercitazioni, step 2 (Intermedio).
+Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: `LLM_Lez_6.pdf`, step 2 (Intermedio).
 Parte dallo step 1 (router) funzionante.
 
 ## Intento

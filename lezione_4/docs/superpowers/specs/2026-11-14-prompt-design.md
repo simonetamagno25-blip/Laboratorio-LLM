@@ -1,6 +1,6 @@
 # Step 5 · Prompt: comandi riusabili nella CLI — specifica
 
-Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: PDF delle esercitazioni, step 5.
+Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: `LLM_Lez_6.pdf`, step 5.
 Parte dagli step 1–4 funzionanti.
 
 ## Intento

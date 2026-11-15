@@ -1,6 +1,6 @@
 # Step 4 · Resource: preferenze dell'utente — specifica
 
-Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: PDF delle esercitazioni, step 4.
+Data: 2026-11-14 · Branch: `feat/agente-web` · Fonte: `LLM_Lez_6.pdf`, step 4.
 Parte dagli step 1–3 funzionanti.
 
 ## Intento

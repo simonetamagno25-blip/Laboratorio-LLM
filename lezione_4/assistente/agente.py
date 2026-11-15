@@ -100,6 +100,10 @@ class Agente:
                 self._in_sospeso[id_turno] = sospeso
             dati = esito["__interrupt__"][0].value
             return RichiestaConferma(domanda_conferma(dati), id_turno, dati)
+        # Turno concluso: il suo checkpoint non serve più (altrimenti la memoria cresce a ogni turno).
+        checkpointer = getattr(self._grafo, "checkpointer", None)
+        if checkpointer is not None:
+            checkpointer.delete_thread(id_turno)
         messaggi = list(esito["messages"])
         risultati = {m.tool_call_id: m.text for m in messaggi if isinstance(m, ToolMessage)}
         strumenti = [

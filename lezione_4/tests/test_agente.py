@@ -102,3 +102,11 @@ def test_conferma_sconosciuta():
     _, agente = crea_agente([])
     with pytest.raises(ConfermaSconosciuta):
         agente.conferma("inesistente", True)
+
+
+def test_i_checkpoint_dei_turni_conclusi_vengono_eliminati(archivio):
+    # Revisione: un thread nuovo per turno faceva crescere senza limite il checkpointer in memoria.
+    _, agente = crea_agente([AIMessage("uno"), AIMessage("due")], archivio=archivio)
+    agente.turno([HumanMessage("a")], [], "")
+    agente.turno([HumanMessage("b")], [], "")
+    assert list(agente._grafo.checkpointer.list(None)) == []

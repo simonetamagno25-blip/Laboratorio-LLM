@@ -79,3 +79,10 @@ def test_indicazione():
 def test_indicazione_ricorda_gli_strumenti():
     # Prova reale: dopo il rifiuto l'agente rispondeva a mente invece di chiamare calcola.
     assert "usa gli strumenti" in indicazione("manca il calcolo").content
+
+
+def test_indicazione_non_fa_ripetere_le_azioni_gia_eseguite():
+    # Revisione: «rispondi di nuovo a tutta la domanda» spingeva a risalvare note già salvate.
+    testo = indicazione("manca l'ora").content
+    assert "solo le parti mancanti" in testo
+    assert "non ripetere" in testo

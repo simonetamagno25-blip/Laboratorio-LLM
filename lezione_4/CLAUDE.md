@@ -10,11 +10,15 @@ Un'applicazione da terminale in Python che conversa con un modello locale e:
 - conserva la cronologia della conversazione per la durata della sessione (nessuna persistenza);
 - offre uno strumento orologio con fuso orario esplicito, richiesto dal modello tramite tool calling
   ed eseguito davvero dal programma;
-- si avvia anche con Docker Compose.
+- si avvia anche con Docker Compose;
+- (lezione 7) recupera i passaggi pertinenti a una domanda da un corpus di documenti, con la loro
+  fonte, tramite un indice vettoriale ripetibile (RAG: ingestion e ricerca).
 
 ## Confini
-- Implementare solo i requisiti concordati. Altri strumenti, workflow e RAG arriveranno
+- Implementare solo i requisiti concordati. Altri strumenti e workflow arriveranno
   nelle lezioni successive: non anticiparli.
+- RAG per gradi: nella lezione 7 solo ingestion, ricerca e valutazione del retrieval, senza
+  modello generativo. La ricerca diventa uno strumento dell'agente solo nella lezione 8.
 - Niente interfacce grafiche, servizi cloud o framework non concordati.
 - Lavorare solo dentro `lezione_4/`. La repository contiene altre lezioni:
   non leggerle per copiarne il codice e non modificarle.
@@ -30,6 +34,22 @@ Un'applicazione da terminale in Python che conversa con un modello locale e:
 - Docker Compose per l'applicazione; LM Studio non va containerizzato.
 - Dipendenze motivate, concordate e con versioni fissate.
 - Comandi documentati anche per PowerShell (Windows).
+
+## RAG (lezione 7)
+- L'ingestion è uno script separato, eseguito quando il corpus cambia; non è uno strumento
+  dell'agente. L'agente (dalla lezione 8) userà soltanto la ricerca.
+- Modello di embedding di LM Studio letto dalla configurazione, lo stesso per documenti e domande;
+  la collezione registra il modello usato e un modello diverso viene bloccato (si reindicizza).
+- Qdrant come servizio di Docker Compose, con volume persistente; mai containerizzare LM Studio.
+- Ingestion ripetibile: ID dei punti stabili (derivati da fonte e posizione del chunk) e upsert;
+  dopo due esecuzioni il numero di punti è lo stesso.
+- Ogni chunk porta nel payload testo e metadati sufficienti a citarne la fonte (documento,
+  capitolo, posizione).
+- Corpus scaricato in `dati/`, fuori da Git, come le slide delle lezioni.
+- Test senza servizi: embedder finto e Qdrant in memoria. Ingestion reale, ricerca su LM Studio
+  e valutazione con domande a fonte attesa sono prove separate, attivate esplicitamente.
+- Il retrieval si valuta su domande con fonte attesa (posizione e score della fonte); «funziona»
+  non è un'evidenza. Un parametro per volta, stesse domande prima e dopo.
 
 ## Metodo: Superpowers
 - Usare le skill di Superpowers per brainstorming, specifica, piano, implementazione e verifica.
@@ -64,7 +84,9 @@ Un'applicazione da terminale in Python che conversa con un modello locale e:
   `spiega` e `riassumi_conversazione`); `scadenze_api/`: servizio HTTP di giorni e scadenze;
 - `backend/`: API delle chat per il front-end, PostgreSQL; `frontend/`: interfaccia di chat
   (HTML/JS, `api.js` generato da `frontend/openapi.json`);
-- `compose.yaml`: front-end, back-end, agente, database (CLI con il profilo `cli`).
+- `compose.yaml`: front-end, back-end, agente, database (CLI con il profilo `cli`);
+- `rag/` (lezione 7): ingestion, ricerca e valutazione del retrieval, separati dall'agente;
+  `dati/`: corpus scaricato, non versionato.
 
 ## Comandi
 Da PowerShell, dalla cartella `lezione_4/` (comandi verificati; dettagli nel `README.md`):
